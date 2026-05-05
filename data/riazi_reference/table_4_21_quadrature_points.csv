@@ -1,0 +1,14 @@
+# SOURCE: Riazi M.R. (2005) Characterization and Properties of Petroleum Fractions, ASTM Manual MNL50, Table 4.21, page 185
+# Gaussian quadrature points and weights for 3-point and 5-point quadrature
+# Originally from Stroud and Secrest (1966), reference [38] in Riazi MNL50
+# These values are used in Eqs. 4.96 and 4.102 for pseudocomponent generation from continuous distributions
+# Columns: N_points (3 or 5), i (1-indexed), root y_i, weight w_i
+N_points,i,root_yi,weight_wi
+3,1,0.41577,0.711093
+3,2,2.29428,0.278518
+3,3,6.28995,0.0103893
+5,1,0.26356,0.521756
+5,2,1.41340,0.398667
+5,3,3.59643,0.0759424
+5,4,7.08581,0.00361176
+5,5,12.64080,0.0000233700

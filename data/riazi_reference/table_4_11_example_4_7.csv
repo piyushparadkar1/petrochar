@@ -1,0 +1,19 @@
+# SOURCE: Riazi M.R. (2005) Characterization and Properties of Petroleum Fractions, ASTM Manual MNL50, Table 4.11, page 171
+# Sample data on characteristics of a C7+ fraction for a gas condensate system in Example 4.7
+# Bulk values: M_7plus = 118.9 g/mol, SG_7plus = 0.7597, I_7plus = 0.2546
+# Note: Tb for C18+ row (Fraction 12) is not given in the source table; left empty
+# Columns: x_w = weight fraction, M = molecular weight (g/mol), Tb = boiling point (K), SG = specific gravity
+#          x_m = mole fraction, x_v = volume fraction, x_cm/x_cw/x_cv = cumulative mole/weight/volume fractions
+Fraction_No,Carbon_No_label,x_w,M_g_per_mol,Tb_K,SG_dimensionless,x_m,x_v,x_cm,x_cw,x_cv
+1,C7,0.261,95,365,0.727,0.321,0.273,0.161,0.130,0.137
+2,C8,0.254,107,390,0.749,0.278,0.259,0.460,0.388,0.403
+3,C9,0.183,121,416,0.768,0.176,0.181,0.687,0.607,0.622
+4,C10,0.140,136,440,0.782,0.121,0.137,0.836,0.768,0.781
+5,C11,0.010,149,461,0.793,0.008,0.009,0.900,0.843,0.854
+6,C12,0.046,163,482,0.804,0.033,0.043,0.920,0.871,0.880
+7,C13,0.042,176,500,0.815,0.028,0.040,0.951,0.915,0.922
+8,C14,0.024,191,520,0.826,0.015,0.022,0.972,0.948,0.953
+9,C15,0.015,207,539,0.836,0.009,0.014,0.984,0.967,0.971
+10,C16,0.009,221,556,0.843,0.005,0.008,0.990,0.979,0.982
+11,C17,0.007,237,573,0.851,0.003,0.006,0.994,0.987,0.988
+12,C18plus,0.010,264,,0.857,0.004,0.009,0.998,0.995,0.996

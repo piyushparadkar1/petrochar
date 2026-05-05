@@ -1,0 +1,17 @@
+# SOURCE: Riazi M.R. (2005) Characterization and Properties of Petroleum Fractions, ASTM Manual MNL50, Table 4.23, page 187
+# Lumping of SCN groups by two methods for the C7+ sample in Example 4.15 (sample 42 in Riazi reference [24])
+# Input fluid: North Sea oil C7+, M_7+ = 151.6, SG_7+ = 0.7917
+# Two methods compared: (I) Gaussian quadrature, (II) Carbon number range
+# Both methods produce 5 pseudocomponents whose mixture properties match the input bulk
+# Columns: Method (GQ or CNR), i (component index), mole_fraction, weight_fraction, M_i (g/mol), SG_i
+Method,i,mole_fraction,weight_fraction,M_i_g_per_mol,SG_dimensionless
+GaussianQuadrature,1,0.5218,0.3493,102.1,0.7436
+GaussianQuadrature,2,0.3987,0.4726,180.8,0.8023
+GaussianQuadrature,3,0.0759,0.1645,330.4,0.8591
+GaussianQuadrature,4,0.0036,0.0134,569.5,0.9174
+GaussianQuadrature,5,0.000023,0.00014,950.1,0.9809
+CarbonNumberRange,1,0.532,0.372,106.7,0.7457
+CarbonNumberRange,2,0.302,0.328,165.5,0.7957
+CarbonNumberRange,3,0.144,0.240,254.4,0.8389
+CarbonNumberRange,4,0.019,0.049,392.7,0.8847
+CarbonNumberRange,5,0.003,0.011,553.5,0.9214

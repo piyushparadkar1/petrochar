@@ -1,0 +1,14 @@
+# SOURCE: Riazi M.R. (2005) Characterization and Properties of Petroleum Fractions, ASTM Manual MNL50, Table 4.13, page 173
+# Coefficients of Eq. (4.56) for M, Tb, and SG for data of Table 4.11 (Example 4.7)
+# Eq. 4.56: P* = [(A/B) ln(1/(1-x_c))]^(1/B), where P* = (P - P_o)/P_o
+# Two-parameter variants have B fixed (B_M=1 for M, B_T=1.5 for Tb, B_SG=3 for SG)
+# Columns: Property, x_c basis (mole/weight/volume), P_o, A, B, RMS error, %AAD, R^2, parameter count (2 or 3)
+Property,xc_basis,P_o,A,B,RMS,pct_AAD,R_squared,Param_count
+M,mole,91,0.2854,0.9429,2.139,0.99,0.999,3
+Tb_K,weight,350,0.1679,1.2586,3.794,0.62,0.998,3
+SG,volume,0.705,0.0232,1.811,0.004,0.32,0.997,3
+SG,weight,0.705,0.0235,1.8248,0.004,0.33,0.997,3
+M,mole,89.86,0.3105,1,2.83,1.39,0.998,2
+Tb_K,weight,340,0.1875,1.5,5.834,1.15,0.993,2
+SG,volume,0.665,0.0132,3,0.005,0.54,0.984,2
+SG,weight,0.6661,0.0132,3,0.005,0.53,0.985,2

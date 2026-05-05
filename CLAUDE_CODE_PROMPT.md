@@ -1,73 +1,203 @@
 # CLAUDE CODE PROMPT — petrochar
 
-## Read this entire file before writing any code.
+> **Read this entire file before writing any code.**
 
-You are starting a new project, **petrochar**: a standalone Python tool for characterizing heavy petroleum fractions into discrete pseudo-components with PC-SAFT parameters, suitable as input to Aspen Plus or any PC-SAFT-capable simulator.
+═══════════════════════════════════════════════════════════════════════════════
+## EXECUTION SCOPE — HARD RULES
+═══════════════════════════════════════════════════════════════════════════════
 
-This tool is the methodology contribution for an upcoming research paper:
-**"Continuous-distribution characterization of heavy petroleum fractions for PC-SAFT phase-equilibrium modeling from routine refinery data"**, target journals: *Energy & Fuels* or *Fuel*.
+**THE USER HAS GIVEN ONE INSTRUCTION AND WILL NOT MONITOR THIS SESSION.**
 
-This is **Paper 1** in a two-paper sequence. Paper 2 (a propane-deasphalting application) is in a separate, unrelated repository and you will not interact with it during this work.
+You will execute exactly **ONE PHASE** per session. The phase name is in the user's instruction line. **THIS SESSION = THE NAMED PHASE ONLY.** Do not start the next phase. Do not "be helpful" by getting ahead. Stop at the explicit STOP marker at the end of the phase.
 
----
+If you find yourself doing any of the following during a Phase 0 session, **STOP IMMEDIATELY**:
+- Writing any Python function in `core/*.py`
+- Writing any test in `tests/*.py`
+- Writing any Streamlit tab in `tabs/*.py`
+- Implementing correlations, distributions, or quadrature logic
+- Anything beyond the scaffold + reference vendoring + first commit
 
-## STRICT BOUNDARIES — READ FIRST
+═══════════════════════════════════════════════════════════════════════════════
+## FORBIDDEN PATHS AND CONCEPTS — ABSOLUTE
+═══════════════════════════════════════════════════════════════════════════════
 
-1. **Do NOT read or reference any file outside this repository.** Specifically, there is an older project at `~/projects/pda_pcsaft_tool/` (or similar location). You are forbidden from reading it. It contains a different architecture (a 7-component "L/H" framework) that this project deliberately moves away from. Reading it would corrupt your design decisions through pattern-matching on the wrong abstractions.
+**You may NOT read, reference, import from, or pattern-match against any code in:**
+- `~/projects/pda_pcsaft_tool/`
+- `../pda_pcsaft_tool/`
+- Any folder named `pda*`, `pcsaft_pda*`, or any directory outside the petrochar repository root.
 
-2. **Build everything from primary sources only.** The acceptable references are:
-   - Riazi, M. R. (2005). *Characterization and Properties of Petroleum Fractions*. ASTM Manual MNL50. Especially Chapter 4 (Sections 4.5, 4.6).
-   - Panuganti, S. R. et al. (2012). PC-SAFT characterization of crude oils and modeling of asphaltene phase behavior. *Fuel*, 93, 658-669.
-   - Gonzalez, D. L. et al. (2007). Modeling study of CO₂-induced asphaltene precipitation. *Energy & Fuels*, 21, 1230-1234. (Asphaltene PC-SAFT defaults: m=33, σ=4.3 Å, ε/k=400 K.)
-   - Watson, K. M. and Nelson, E. F. (1933). *Industrial & Engineering Chemistry*, 25, 880. (Watson K factor.)
-   - Whitson, C. H. (1983). Characterizing hydrocarbon plus fractions. *SPE Journal*, 23(4), 683-694.
-   - García Cárdenas, J. and Ancheyta, J. (2022). Modeling of the deasphalting process. *Industrial & Engineering Chemistry Research*, 61, 3383-3394.
+**Concepts that DO NOT EXIST in this project. If they appear in your output, that is contamination from your training data — delete them and rewrite:**
+- `MW_ARO_L` / `MW_RES_L` tuning knobs
+- L/H sub-fractions (light/heavy splits within a SARA class)
+- Harmonic-mean MW closure for back-calculating sub-fraction MWs
+- 7-component framework with discrete L/H labels (petrochar's 7 components are 5 quadrature + 1 ASP + propane — entirely different concept)
+- DAO yield as a calibration target
+- DAO SARA as a model input
+- Any "tuning slider" against process observables
 
-3. **No DAO data. No process-side data. Ever.** This tool's contract is feed-side characterization only. The codebase must contain no DAO inputs, no DAO outputs, no DAO references. Validation is against textbook examples and bulk-property closures only.
+**petrochar's architecture is fundamentally different.** It uses a continuous distribution (Riazi Eq. 4.56), Gaussian quadrature (Riazi §4.6.1.1), and per-pseudo-component Watson K. There is nothing to tune. Pseudo-components are determined fully by feed-side measurements + published correlations.
 
-4. **No phase-equilibrium computation.** No flashes. No LLE solvers. No iterative chemical-potential equality. This tool produces parameters; downstream simulators (Aspen Plus, etc.) compute phase splits.
+**Self-check before every commit:**
+```bash
+grep -rni "MW_ARO_L\|MW_RES_L\|ARO-L\|ARO_L\|RES-L\|RES_L\|harmonic.mean\|DAO" \
+    --include="*.py" --include="*.toml" --include="*.txt" --include="*.cfg" .
+```
+This must return zero hits in committed code (`.md` files legitimately list these as forbidden — exclude them from the grep above).
 
-5. **No tuning against process observables.** All pseudo-component properties (MW, Tb, SG, distribution shape) come from feed measurements and published correlations. Nothing is fitted against DAO yield or composition.
+═══════════════════════════════════════════════════════════════════════════════
+## PROJECT IDENTITY
+═══════════════════════════════════════════════════════════════════════════════
 
----
+**petrochar** is a standalone Python tool for characterizing heavy petroleum fractions into discrete pseudo-components with PC-SAFT parameters, suitable as input to Aspen Plus or any PC-SAFT-capable simulator.
 
+This is the methodology contribution for **Paper 1**: "Continuous-distribution characterization of heavy petroleum fractions for PC-SAFT phase-equilibrium modeling from routine refinery data". Target: *Energy & Fuels* or *Fuel*.
+
+Paper 2 (a propane-deasphalting application) is a separate, unrelated repository. You will not interact with it.
+
+═══════════════════════════════════════════════════════════════════════════════
+## REFERENCE MATERIALS — VENDORED IN THIS REPO
+═══════════════════════════════════════════════════════════════════════════════
+
+The user has placed reference materials inside `data/riazi_reference/` for offline reference during implementation.
+
+**Reference data CSVs** — load via `pandas.read_csv(..., comment='#')`:
+- `table_4_6_scn_groups.csv` — SCN group properties C6-C50 (M, Tb, SG, n_20, ...). FALLBACK only — petrochar's primary path computes M and SG from per-cut Tb via Riazi-Daubert.
+- `table_4_11_example_4_7.csv` — North Sea gas condensate C7+ data. Used in Phases 1, 3, 4 pass-gates.
+- `table_4_13_distribution_coeffs.csv` — Distribution coefficients for Example 4.7. Used in Phases 3, 4 pass-gates.
+- `table_4_21_quadrature_points.csv` — Gaussian quadrature roots and weights (3-point, 5-point). Used directly in Phase 5 implementation.
+- `table_4_22_quadrature_3pt.csv` — Expected 3-point quadrature output for Example 4.14. Used in Phase 5 pass-gate.
+- `table_4_23_lumping_methods.csv` — Five-component lumping by two methods, Example 4.15. Supplementary validation.
+
+**Reference page extracts** (PNG images, 200 DPI, raster of Riazi MNL50 book pages) — read with the `view` tool when implementing the corresponding correlation:
+- `page_054_watson_k_eq_2_13.png` — Eq. 2.13 (Watson K). Phase 1 reference.
+- `page_077_riazi_daubert_Tb.png` — **Eqs. 2.56 and 2.57 (Riazi-Daubert Tb), plus Eqs. 2.59 and 2.60 (Riazi-Daubert SG)**. Phase 1 critical reference. **Read this page before implementing any Tb or SG correlation.**
+- `page_078_riazi_daubert_Tb_continued.png` — continuation. Phase 1 reference.
+- `page_122_daubert_d86_to_tbp.png` — Section 3.2.2.2, Eqs. 3.20-3.22, Table 3.7 constants. Phase 2 reference.
+- `page_123_daubert_d86_to_tbp.png` — continuation with Eq. 3.22 cut-point pattern.
+- `page_124_daubert_d86_to_tbp.png` — continuation with Eqs. 3.23-3.25 (SD-to-TBP).
+- `page_181_table_4_5_4_6.png` — Table 4.5 SCN coefficients + Table 4.6 SCN data. Phase 4 fallback reference.
+- `page_182_table_4_5_4_6.png` — continuation.
+- `page_183_table_4_5_4_6.png` — continuation.
+
+When the comment in your code says "Riazi MNL50 Eq. X.YZ", verify by viewing the relevant page extract first. Do not implement an equation from memory.
+
+═══════════════════════════════════════════════════════════════════════════════
+## CRITICAL CORRECTION — REGIME-DEPENDENT Tb CORRELATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Riazi MNL50 §2.4.2.1 provides **TWO** Riazi-Daubert correlations for Tb, valid in **DIFFERENT** molecular weight ranges:
+
+- **Eq. 2.56**, valid for M = 70-300 (light/medium hydrocarbons):
+  ```
+  Tb = 3.76587 × [exp(3.7741e-3 × M + 2.98404 × SG − 4.25288e-3 × M × SG)] × M^0.40167 × SG^(-1.58262)
+  ```
+
+- **Eq. 2.57**, valid for M = 300-700 (heavy hydrocarbons), recommended for M > 300:
+  ```
+  Tb = 9.3369 × [exp(1.6514e-4 × M + 1.4103 × SG − 7.5152e-4 × M × SG)] × M^0.5369 × SG^(-0.7276)
+  ```
+
+**For a VTB-type feed, pseudo-components span both ranges.** Light cuts may be M ≈ 200-300; heavy cuts may be M ≈ 600-1500.
+
+**Your Tb function must select the correlation based on input M:**
+
+```python
+def riazi_daubert_Tb(M, SG):
+    """
+    Compute normal boiling point from molecular weight and specific gravity.
+    
+    Two-regime correlation per Riazi MNL50 §2.4.2.1:
+        - Eq. 2.56 for M in [70, 300]
+        - Eq. 2.57 for M in [300, 700]
+    
+    For M > 700, Eq. 2.57 is extrapolated (no better correlation in MNL50);
+    user is warned via log message.
+    For M < 70, the function raises ValueError (outside refinery-relevant range).
+    
+    Args:
+        M: molecular weight, g/mol
+        SG: specific gravity at 15.5°C, dimensionless
+    
+    Returns:
+        Tb: normal boiling point, K
+    
+    Reference: Riazi MNL50 Eqs. 2.56 and 2.57 (page 58-59 of book = PDF pages 77-78).
+    """
+    if M < 70:
+        raise ValueError(f"M = {M} below Riazi-Daubert validity (M >= 70 required)")
+    if M <= 300:
+        # Eq. 2.56
+        Tb = 3.76587 * np.exp(3.7741e-3*M + 2.98404*SG - 4.25288e-3*M*SG) \
+             * M**0.40167 * SG**(-1.58262)
+    else:
+        # Eq. 2.57
+        Tb = 9.3369 * np.exp(1.6514e-4*M + 1.4103*SG - 7.5152e-4*M*SG) \
+             * M**0.5369 * SG**(-0.7276)
+        if M > 700:
+            import warnings
+            warnings.warn(f"M = {M} above Riazi-Daubert (Eq. 2.57) validated range "
+                          f"(70-700); result is extrapolation.")
+    return Tb
+```
+
+**The `riazi_daubert_M(Tb_K, SG)` inverse function must invert whichever correlation applies, with regime selection based on solving for M.** Use `scipy.optimize.brentq` separately on each regime and take the solution whose forward Tb matches the input within tolerance. This is non-trivial — read the page extract before implementing.
+
+**SG correlations** (Eqs. 2.59 and 2.60) are also regime-dependent:
+- Eq. 2.59 for light hydrocarbons
+- Eq. 2.60 for heavy fractions, M = 300-700 (preferred for VTB pseudo-components)
+
+═══════════════════════════════════════════════════════════════════════════════
+## ACCEPTABLE PRIMARY SOURCES
+═══════════════════════════════════════════════════════════════════════════════
+
+Build everything from these sources. No others.
+
+- Riazi, M. R. (2005). *Characterization and Properties of Petroleum Fractions*. ASTM Manual MNL50. ISBN 0-8031-3361-8. Vendored in `data/riazi_reference/Riazi_MNL50_full.pdf` and as page extracts above.
+- Panuganti, S. R., Tavakkoli, M., Vargas, F. M., Gonzalez, D. L., Chapman, W. G. (2012). PC-SAFT characterization of crude oils and modeling of asphaltene phase behavior. *Fuel*, 93, 658-669.
+- Gonzalez, D. L., Hirasaki, G. J., Creek, J., Chapman, W. G. (2007). Modeling study of CO₂-induced asphaltene precipitation. *Energy & Fuels*, 21, 1230-1234. (Asphaltene PC-SAFT defaults: m = 33, σ = 4.3 Å, ε/k = 400 K.)
+- Watson, K. M. and Nelson, E. F. (1933). *Industrial & Engineering Chemistry*, 25, 880. (Watson K factor.)
+- Whitson, C. H. (1983). Characterizing hydrocarbon plus fractions. *SPE Journal*, 23(4), 683-694.
+- García Cárdenas, J. and Ancheyta, J. (2022). Modeling of the deasphalting process. *Industrial & Engineering Chemistry Research*, 61, 3383-3394.
+
+═══════════════════════════════════════════════════════════════════════════════
 ## OBJECTIVE AND CONTRACT
+═══════════════════════════════════════════════════════════════════════════════
 
 **Inputs (all routinely measured at any operating refinery):**
-- Distillation curve (any ASTM method: D86, D1160 AET, D7169, TBP). Cumulative fraction (weight, volume, or mole) vs Tb in K or °C.
+- Distillation curve (any ASTM method: D86, D1160 AET, D7169, TBP). Cumulative fraction (weight, volume, or mole) vs Tb.
 - Bulk specific gravity at 15°C.
-- Bulk molecular weight (lab VPO or correlation estimate).
+- Bulk molecular weight.
 - SARA wt% (saturates, aromatics, resins, asphaltenes), summing to 100%.
 
 **Outputs:**
-- Discrete pseudo-component table: for each component, (z_i, M_i, Tb_K, SG, K_W, γ, m, σ, ε/k).
+- Discrete pseudo-component table: per component, (z_i, M_i, Tb_K, SG, K_W, γ, m, σ, ε/k).
 - Aspen-Plus-paste-ready TSV/CSV exports.
-- Distribution diagnostics (PDFs, CDFs, fit-quality metrics, closure errors).
+- Distribution diagnostics: PDFs, CDFs, fit-quality metrics, closure errors.
 - Validation report comparing tool output against Riazi MNL50 textbook examples.
 
-**Architecture commitment:**
-- Discretization via Gaussian quadrature (Riazi §4.6.1.1), default 5 points + 1 discrete asphaltene component + propane = 7 components total. User-selectable 3-point variant.
-- Distribution model: Riazi generalized model (Eq. 4.56) for Tb and SG. Gamma model (Eq. 4.31) available as a legacy option but documented as inappropriate for VTB-scale fractions per Riazi p. 178-179.
-- Asphaltenes are always discrete with literature defaults (Gonzalez 2007). They never enter the distillation-curve fitting domain.
-- PC-SAFT parameters via Panuganti 2012 Table 6 correlations for distillable pseudo-components; Gonzalez 2007 for asphaltenes; pure-component values for propane.
-- Aromaticity factor γ derived per pseudo-component from its individual Watson K factor (computed from its own Tb_i and SG_i), via the linear clamp `γ = clamp((13.0 − K_W) / (13.0 − 9.5), 0, 1)`.
+**Architecture commitments (FROZEN):**
+- Discretization via Gaussian quadrature (Riazi §4.6.1.1). Default 5 points + 1 discrete asphaltene component + propane = 7 components total. 3-point variant user-selectable.
+- Distribution model: Riazi generalized model (Eq. 4.56) for Tb and SG. Gamma model (Eq. 4.31) is legacy-only — Riazi p. 178-179 documents that gamma fails on heavy oils.
+- **Regime-dependent Tb correlation: Eq. 2.56 (M ≤ 300) and Eq. 2.57 (M > 300). See "CRITICAL CORRECTION" above.**
+- Asphaltenes are always discrete. Never enter the distillation-curve fitting domain. Gonzalez 2007 PC-SAFT defaults.
+- PC-SAFT parameters: Panuganti 2012 Table 6 correlations for distillable pseudo-components; Gonzalez 2007 for asphaltenes; pure-component values for propane (m=2.002, σ=3.6180 Å [not 3.168], ε/k=208.11 K).
+- Aromaticity factor γ derived per pseudo-component from individual Watson K via the linear clamp `γ = clamp((13.0 − K_W) / (13.0 − 9.5), 0, 1)`.
 
----
+═══════════════════════════════════════════════════════════════════════════════
+## DEVELOPMENT PROTOCOL
+═══════════════════════════════════════════════════════════════════════════════
 
-## DEVELOPMENT PROTOCOL — STRICT
+1. **No shortcuts. No stubs.** Every function fully implemented. No `pass`, no `NotImplementedError`, no commented-out fallbacks.
+2. **Validation-first.** Each numerical module has a pass-gate test reproducing a Riazi textbook example to within stated tolerance. **You may not proceed to the next phase until the current phase's pass-gate is green.**
+3. **Citation density.** Every correlation, equation, and constant has a docstring citing source: page and equation number for Riazi MNL50; section and equation number for Panuganti 2012 and Gonzalez 2007.
+4. **Page-extract verification.** Before implementing any Riazi correlation, view the corresponding page extract (PNG file in `data/riazi_reference/`) using the `view` tool. Confirm equation form against the image. Do not implement from memory.
+5. **Units explicit, always.** Tb in K internally; convert at I/O boundaries. SARA in wt% (not fractions). Distillation curves carry an explicit basis flag.
+6. **No proprietary names anywhere.** Generic only: "VTB sample", "heavy petroleum fraction".
+7. **Session protocol.** Start: read `CURRENT_STATUS.md`. End: update it with phase completion, decisions, blockers, session entry. Commit.
 
-1. **No shortcuts. No stubs.** Every function is fully implemented. No `pass`, no `NotImplementedError`, no commented-out fallbacks.
-2. **Validation-first.** Each numerical module has a pass-gate test that reproduces a Riazi textbook example to within stated tolerance. **You may not proceed to the next phase until the current phase's pass-gate is green.** This is not negotiable.
-3. **Citation density.** Every correlation, equation, and constant has a docstring citing the source: page and equation number for Riazi MNL50; section and equation number for Panuganti 2012 and Gonzalez 2007.
-4. **Units explicit, always.** Every function signature documents input and output units. Tb in K internally; convert at I/O boundaries. SARA in wt% (not fractions). Distillation curves carry an explicit basis flag (cumulative weight, volume, or mole fraction).
-5. **No proprietary names anywhere.** No client refinery, no plant numbers, no internal codes. UI says "VTB sample" or "heavy petroleum fraction".
-6. **Session protocol.** At the start of every session, read `CURRENT_STATUS.md`. At the end of every session, update it: mark phase complete, log decisions, append session entry, commit.
-
----
-
-## REPOSITORY LAYOUT
-
-Create exactly this structure in Phase 0:
+═══════════════════════════════════════════════════════════════════════════════
+## REPOSITORY LAYOUT (target structure — built incrementally)
+═══════════════════════════════════════════════════════════════════════════════
 
 ```
 petrochar/
@@ -75,9 +205,9 @@ petrochar/
 ├── LICENSE                              # MIT
 ├── requirements.txt
 ├── runtime.txt                          # python-3.11
-├── pyproject.toml                       # for later pip-installable packaging
-├── CLAUDE.md                            # project rules, mirror of section "STRICT BOUNDARIES" + "DEVELOPMENT PROTOCOL"
-├── CLAUDE_CODE_PROMPT.md                # this file (committed for traceability)
+├── pyproject.toml
+├── CLAUDE.md                            # project rules (mirror of key sections)
+├── CLAUDE_CODE_PROMPT.md                # this file (committed)
 ├── CURRENT_STATUS.md                    # session log
 ├── .gitignore
 ├── app.py                               # Streamlit entry; built last, in Phase 9
@@ -104,13 +234,24 @@ petrochar/
 │   └── test_phase8_pipeline.py
 ├── data/
 │   └── riazi_reference/
-│       ├── README.md                    # provenance and citation
+│       ├── README.md
+│       ├── Riazi_MNL50_full.pdf                        # full book (12 MB) — vendored by user
 │       ├── table_4_6_scn_groups.csv
 │       ├── table_4_11_example_4_7.csv
 │       ├── table_4_13_distribution_coeffs.csv
+│       ├── table_4_21_quadrature_points.csv
 │       ├── table_4_22_quadrature_3pt.csv
-│       └── table_4_23_lumping_methods.csv
-├── tabs/                                # Phase 9, Streamlit UI modules
+│       ├── table_4_23_lumping_methods.csv
+│       ├── page_054_watson_k_eq_2_13.png
+│       ├── page_077_riazi_daubert_Tb.png
+│       ├── page_078_riazi_daubert_Tb_continued.png
+│       ├── page_122_daubert_d86_to_tbp.png
+│       ├── page_123_daubert_d86_to_tbp.png
+│       ├── page_124_daubert_d86_to_tbp.png
+│       ├── page_181_table_4_5_4_6.png
+│       ├── page_182_table_4_5_4_6.png
+│       └── page_183_table_4_5_4_6.png
+├── tabs/                                # Phase 9
 │   ├── __init__.py
 │   ├── input_data.py
 │   ├── distillation_fit.py
@@ -120,187 +261,149 @@ petrochar/
 │   └── validation.py
 └── docs/
     ├── methodology.md                   # draft Paper 1 Section 2
-    └── validation_report.md             # Phase 8 deliverable; draft Paper 1 Section 3
+    └── validation_report.md             # Phase 8 deliverable
 ```
 
-Initialize git in Phase 0. Confirm `pytest` runs (with no tests yet, exit code zero).
+═══════════════════════════════════════════════════════════════════════════════
+## PHASES (overview — execute one per session)
+═══════════════════════════════════════════════════════════════════════════════
 
----
+| Phase | Deliverable | Pass gate |
+|-------|-------------|-----------|
+| 0 | Repository scaffold + reference materials vendored + first commit | `pytest` exits 0 with no tests |
+| 1 | `core/correlations.py` (regime-aware Riazi-Daubert, Watson K, gamma function) | Riazi Table 4.11 reproduction ±2 K on Tb across ALL 12 rows |
+| 2 | `core/distillation.py` (DistillationCurve class, Daubert D86→TBP) | Synthetic D86 conversion ±5 K |
+| 3 | `core/distribution.py` (Riazi Eq. 4.56 generalized fit) | Riazi Example 4.13 — T_o, A_T, B_T to ±5% |
+| 4 | `core/sg_distribution.py` + `core/mw_distribution.py` | Riazi Table 4.13 SG row + bulk closures <1% |
+| 5 | `core/quadrature.py` (Gaussian discretization) | Riazi Example 4.14 — Table 4.22 reproduction |
+| 6 | `core/sara.py` (ASP discrete + K_W bin closure check) | Synthetic three-component fluid recovery ±3 wt% |
+| 7 | `core/watson_k.py` + `core/pcsaft_params.py` | Panuganti Table 6 reproduction ±2% |
+| 8 | End-to-end pipeline + validation report | All metrics within tolerances on synthetic VTB |
+| 9 | Streamlit UI (6 tabs) | App boots, validation tab passes |
+| 10 | Final docs + pyproject packaging | `pip install -e .` works |
 
-## PHASES
+Detailed pass-gate criteria for each phase are in the corresponding test files (which are written as part of that phase's deliverable). Future-phase content is **out of scope** for the current phase.
 
-Each phase is a single Claude Code session (or two if needed). Phase pass-gates are non-negotiable.
+═══════════════════════════════════════════════════════════════════════════════
+## PHASE 0 — DETAILED INSTRUCTIONS (this is what gets executed when user says "execute Phase 0")
+═══════════════════════════════════════════════════════════════════════════════
 
-### Phase 0 — Repository scaffold
-Create directory structure above. Write minimal `README.md`, `LICENSE` (MIT), `requirements.txt` (numpy, scipy, pandas, matplotlib, pytest, streamlit, openpyxl), `runtime.txt` (`python-3.11`), `pyproject.toml` (project name `petrochar`, version `0.1.0`), `CLAUDE.md`, `CURRENT_STATUS.md`, `.gitignore`. Commit. Vendor Riazi reference CSVs into `data/riazi_reference/` per `data/riazi_reference/README.md` (see "Reference data" section below).
+**Phase 0 is intentionally minimal. Do not expand it. Do not write any code in `core/`, `tests/`, or `tabs/`. Do not write correlations. Do not write tests. Just the scaffold.**
 
-### Phase 1 — Shared correlations
-`core/correlations.py`. Functions: `riazi_daubert_Tb(M, SG)`, `riazi_daubert_M(Tb_K, SG)`, `watson_K(Tb_K, SG)`, `gamma_function(x)`, `incomplete_gamma_upper(a, q)`, `aromaticity_to_gamma(K_W)`. Each function fully implemented with docstring citing Riazi MNL50 page/equation, Panuganti 2012, Watson 1933, etc.
+### Step 1 — Confirm working directory
 
-**Pass gate (`tests/test_phase1_correlations.py`):**
-- For each row of Riazi Table 4.11 (`data/riazi_reference/table_4_11_example_4_7.csv`), `riazi_daubert_Tb(M, SG)` reproduces tabulated Tb to ±2 K.
-- `riazi_daubert_M(Tb_K, SG)` (numerical inverse via `scipy.optimize.brentq`) reproduces M to ±1.5%.
-- `watson_K(Tb_K=350, SG=0.7597)` returns ~12.0 (Riazi Example 4.7 bulk values).
-- `gamma_function(2.0) == 1.0` exactly (recurrence base case).
-- `gamma_function(0.5)` reproduces √π to ±0.1%.
+The user has placed you in `~/projects/petrochar/` (or equivalent). Confirm:
+```bash
+pwd        # should end in /petrochar
+ls -la
+```
 
-### Phase 2 — Distillation curve handling
-`core/distillation.py`. Class `DistillationCurve` with method tags {D86, D1160_AET, D7169, TBP} and basis tags {weight, volume, mole}. Internal canonical form: cumulative weight fraction `x_cw` array vs `Tb_K` array. Implements:
-- D86 → TBP conversion via Riazi §3.1.3 Eqs. 3.18-3.20 (Daubert procedure).
-- D1160 AET: no temperature conversion (data is already AET); only unit handling.
-- D7169, TBP: take as-is in K.
-- Volume → weight conversion using bulk SG distribution (if available) or method-flag refusal.
-- Validity flags: D86 unreliable above 370°C, D1160 capped at user-stated cracking limit, D7169 capped at ~720°C.
-- `.measured_max_T_K`, `.cutoff_warnings`, `.to_TBP()` exposed.
+You should see, at minimum:
+- `CLAUDE_CODE_PROMPT.md`, `CLAUDE.md`, `CURRENT_STATUS.md`, `README.md` at root
+- `data/riazi_reference/` containing 6 CSVs, 9 PNGs, the full PDF, and a README
 
-**Pass gate:** unit test using a fabricated D86 curve with hand-computed expected D86→TBP conversion (from Riazi Eqs. 3.18-3.20). Tolerance ±5 K at any cumulative point.
+If `pwd` does not end in `/petrochar`, STOP and ask the user.
 
-### Phase 3 — Generalized distribution fit (Riazi Eq. 4.56)
-`core/distribution.py`. Class `GeneralizedDistribution` implementing Riazi §4.5.4.1.
+### Step 2 — Create directory tree
 
-Mathematics: P* = [(A/B) ln(1/(1−x_c))]^(1/B), where P* = (P − P_o) / P_o.
+```bash
+mkdir -p core tests tabs docs
+touch core/__init__.py tests/__init__.py tabs/__init__.py
+```
 
-Fitting via `scipy.optimize.least_squares` on linearized form (Eq. 4.57). Defaults per Riazi p. 174: `B_T ≈ 1.5` for Tb. Two-parameter fit (B fixed) and three-parameter fit (all of P_o, A, B free) both supported, user-selectable. PDF (Eq. 4.70) and CDF (Eq. 4.56) exposed. Average property via Eq. 4.74-4.75.
+Empty `__init__.py` files only. Do NOT create `core/correlations.py` or any other module file.
 
-**Pass gate (`tests/test_phase3_riazi_example_4_13.py`):**
-Reproduce Riazi Example 4.13 (Method B with TBP curve). Input data: Table 4.11 columns 3 (Tb,K) and 5 (x_cw). Reference output: Table 4.13 row "T_b" — T_o = 350 K, A_T = 0.1679, B_T = 1.2586 (three-parameter fit).
-Tolerance: T_o ±5 K, A_T ±5%, B_T ±5%.
+### Step 3 — Write `LICENSE` (MIT, copyright "Piyush Paradkar 2026")
 
-### Phase 4 — SG and MW distributions
-`core/sg_distribution.py` and `core/mw_distribution.py`.
+### Step 4 — Write `requirements.txt`
+```
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+pytest>=7.4
+streamlit>=1.30
+openpyxl>=3.1
+```
 
-SG distribution: two methods, both implemented:
-1. Constant Watson K (Whitson; Riazi p. 178). Compute K_W from bulk M and bulk SG; assume same K_W for all subfractions; SG_i derived from Tb_i and K_W.
-2. Generalized fit via Eq. 4.56 with B_SG ≈ 3 default (Riazi p. 174, Table 4.13).
+### Step 5 — Write `runtime.txt`: `python-3.11`
 
-Default to constant Watson K for VTB-scale fractions. User-toggleable.
+### Step 6 — Write `pyproject.toml`
+Project name `petrochar`, version `0.1.0`, description per project identity, author Piyush Paradkar, MIT license, dependencies mirror `requirements.txt`. Standard PEP-621 format.
 
-MW distribution: for each cut along x_cw, given Tb_i and SG_i, compute M_i via `riazi_daubert_M`. The bulk M closure (harmonic-mean integral, Riazi Eq. 4.32) is a verification, not a constraint.
+### Step 7 — Write `.gitignore`
+Python standard (`__pycache__/`, `*.pyc`, `.pytest_cache/`, `.venv/`, `.streamlit/`, `*.egg-info/`, `dist/`, `build/`). Plus: ignore `*.xlsx` and `*.csv` at repo root, but **not** inside `data/`. Add an exception line `!data/riazi_reference/*.csv`. Also `!data/riazi_reference/*.png` and `!data/riazi_reference/*.pdf`.
 
-**Pass gate (`tests/test_phase4_sg_mw.py`):**
-- Reproduce Riazi Table 4.13 SG row: SG_o = 0.705, A_SG = 0.0232, B_SG = 1.811, tolerance ±5%.
-- Bulk M_av and SG_av from Eqs. 4.74-4.76 within 1% of Riazi Example 4.7 measured values (M_7+ = 118.9, SG_7+ = 0.7597).
+### Step 8 — Verify `CLAUDE.md` and `CURRENT_STATUS.md` are present
+Both should already be in place from user setup. If not, create from templates at the bottom of this prompt.
 
-### Phase 5 — Gaussian quadrature discretization
-`core/quadrature.py`. Reference: Riazi MNL50 §4.6.1.1, Table 4.21.
+### Step 9 — Verify reference materials exist
+```bash
+ls data/riazi_reference/
+```
+Expected files:
+- `README.md`
+- `Riazi_MNL50_full.pdf` (full book, ~12 MB)
+- 6 CSVs: `table_4_6_scn_groups.csv`, `table_4_11_example_4_7.csv`, `table_4_13_distribution_coeffs.csv`, `table_4_21_quadrature_points.csv`, `table_4_22_quadrature_3pt.csv`, `table_4_23_lumping_methods.csv`
+- 9 PNGs: page extracts as listed in "REFERENCE MATERIALS" section above
 
-Hard-code quadrature points/weights for N ∈ {3, 5}. Implement `discretize_generalized(N, distribution)` using Eqs. 4.83-4.91. (Eqs. 4.91-4.92 with B = 1 shortcut as fallback for light-oil / gas-condensate cases; not the default.)
+If any item is missing, log in `CURRENT_STATUS.md` as a Phase 0 blocker, but proceed with the rest of the scaffold. **Do not invent CSV content or generate PNG files.**
 
-Output: list of `Pseudocomponent` records with fields `(z_i, M_i, Tb_K, SG, x_cw_lower, x_cw_upper)`.
+### Step 10 — Initialize git and commit
+```bash
+git init
+git add -A
+git commit -m "Phase 0: repository scaffold and Riazi reference materials vendored"
+```
 
-**Pass gate (`tests/test_phase5_riazi_example_4_14.py`):**
-Reproduce Riazi Example 4.14 (3-point Gaussian quadrature on Table 4.13 distribution). Reference output is Table 4.22:
+### Step 11 — Verify environment
+```bash
+pip install -r requirements.txt    # if not already in a venv with deps
+python -c "import numpy, scipy, pandas, matplotlib, pytest, streamlit, openpyxl; print('imports OK')"
+pytest    # should exit 0 with no tests
+```
 
-| i | y_i  | w_i = z_i | M_i   |
-|---|------|-----------|-------|
-| 1 | 0.416 | 0.711    | 103.6 |
-| 2 | 2.294 | 0.279    | 154.6 |
-| 3 | 6.290 | 0.010    | 252.2 |
-| Mixture | — | 1.000 | 119.4 |
+If imports fail, log in `CURRENT_STATUS.md`. If `pytest` returns non-zero with no tests, investigate.
 
-Tolerance: ±1% on M_i, ±0.005 on z_i. Mixture M_av must match Riazi's stated 118.9 ±0.5%.
+### Step 12 — Update `CURRENT_STATUS.md`
+- Mark Phase 0 complete with today's date.
+- Set "Current Phase" to "Phase 1 — Shared correlations".
+- Append session log entry: `YYYY-MM-DD | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1`
+- Note any blockers.
 
-### Phase 6 — SARA closure and asphaltene handling
-`core/sara.py`. 
+### Step 13 — Self-check before final commit
+```bash
+grep -rni "MW_ARO_L\|MW_RES_L\|ARO-L\|ARO_L\|RES-L\|RES_L\|harmonic.mean\|DAO" \
+    --include="*.py" --include="*.toml" --include="*.txt" --include="*.cfg" .
+```
+Expected: zero hits. If any non-md file has a forbidden term, that is a contamination bug — stop, investigate, fix, retry.
 
-Logic:
-1. User supplies SARA wt% summing to 100.
-2. ASP wt% is removed from the distillation-curve domain. Distillation curve is verified to represent only (1 − ASP_wt%/100) of total mass; if user-supplied curve includes ASP mass, renormalize and warn.
-3. After Phase 5 produces N distillable pseudo-components, append a single discrete ASP component:
-   - Mass fraction: ASP_wt%/100
-   - MW: 1700 g/mol (Gonzalez 2007 nanoaggregate)
-   - Tb: 800 °C (numerical convention, document explicitly)
-   - SG: 1.15 (convention)
-   - PC-SAFT params: Gonzalez 2007 defaults (handled in Phase 7)
-4. K_W-bin closure check: aggregate distillable pseudo-components into nominal SAT/ARO/RES classes by K_W:
-   - K_W ≥ 12.0 → SAT
-   - 11.0 ≤ K_W < 12.0 → ARO
-   - K_W < 11.0 → RES
-   Compare to user-supplied SARA. Flag deviation > ±3 wt% per class as data-consistency warning. **This is a closure check, not a constraint — pseudo-components are not retuned to match SARA.**
+### Step 14 — Final commit
+```bash
+git add -A
+git commit -m "Phase 0: complete — status updated, env verified"
+```
 
-K_W bin thresholds documented as conventions; user-overridable. Cite Riazi p. 75.
+═══════════════════════════════════════════════════════════════════════════════
+## ▼▼▼  END OF PHASE 0. STOP HERE.  ▼▼▼
+═══════════════════════════════════════════════════════════════════════════════
 
-**Pass gate (`tests/test_phase6_sara_closure.py`):**
-Synthetic test with a constructed three-component model fluid (paraffin, alkylbenzene, naphthenic) with known mass fractions. Run distillation curve through full pipeline; verify K_W binning recovers input class fractions to ±3 wt%.
+**Do not start Phase 1.** Do not write `core/correlations.py`. Do not write any test. Do not write any tab.
 
-### Phase 7 — PC-SAFT parameter generation
-`core/watson_k.py` and `core/pcsaft_params.py`.
+If you have time, energy, or capability remaining: stop anyway. The user will start a new session for Phase 1. That session will read `CURRENT_STATUS.md` and proceed with focused context.
 
-`watson_k.py`: `compute_K_W_per_pseudocomponent(pseudocomp_list)` — adds K_W and γ to each component using Phase 1's `aromaticity_to_gamma`.
+Print the contents of `CURRENT_STATUS.md` to the chat as your final action so the user can verify.
 
-`pcsaft_params.py`:
-- `panuganti_alkyl_aromatic_resin_params(M, gamma)` — Panuganti 2012 *Fuel* 93, Table 6, alkyl-aromatic / resin family correlations.
-- `panuganti_saturate_params(M)` — saturate end-member correlations from same source.
-- `gonzalez_asphaltene_params()` — fixed: m = 33, σ = 4.3 Å, ε/k = 400 K. Cite Gonzalez 2007 *Energy & Fuels* 21, 1230.
-- `propane_params()` — fixed pure-component: m = 2.002, σ = 3.6180 Å, ε/k = 208.11 K. **σ = 3.6180 Å, not 3.168 Å** — this is a known typo in some Aspen built-in databases.
-- `generate_pcsaft_table(pseudocomp_list)` — top-level: returns pandas DataFrame, all components, all parameters, ready for Phase 9 export.
-
-**Pass gate (`tests/test_phase7_pcsaft.py`):**
-For three reference (M, γ) pairs from Panuganti 2012 Table 6 worked examples, verify (m, σ, ε/k) reproduce to ±2%. If exact reference values are unavailable in the published table, document the correlation formulas explicitly in code with equation numbers, and verify continuity properties: m monotonically increasing in M; σ in [3.5, 4.5] Å; ε/k in [200, 450] K for petroleum pseudocomponents.
-
-### Phase 8 — End-to-end pipeline integration
-`tests/test_phase8_pipeline.py` and `docs/validation_report.md`.
-
-Run full pipeline (Phases 1-7) on a synthetic VTB-like input:
-- Distillation curve: fabricated D1160 AET, IBP 280 °C, FBP 540 °C measured, 11 cumulative-weight points.
-- Bulk SG = 1.020. Bulk MW = 700 g/mol. SARA = 12 / 38 / 38 / 12 wt%.
-
-Verify:
-- Distillation fit residual < 5 K RMS.
-- Bulk MW closure < 2%.
-- Bulk SG closure < 2%.
-- SARA K_W-bin closure within ±3 wt% per class.
-- Output: 5 quadrature points + 1 ASP = 6 pseudo-components (+ propane in Aspen export).
-- All PC-SAFT parameters within physical bounds.
-
-Generate `docs/validation_report.md` with all Phase 3, 4, 5, 6, 7, 8 pass-gate results in tables. **This document is the draft for Paper 1 Section 3 (Method validation).**
-
-This is the moment the engine is declared correct. **Do not proceed to Phase 9 until this passes.**
-
-### Phase 9 — Streamlit UI
-`app.py` plus `tabs/*.py`. Six tabs:
-
-1. **Input Data.** File upload (Excel/CSV) or manual entry. Distillation method/basis selectors. Bulk SG, bulk MW, SARA inputs. Live validity warnings.
-2. **Distillation Fit.** Visual overlay: measured points, fitted Eq. 4.56 curve, extrapolated tail. Fit-quality metrics (RMS, AAD, R²). SG-distribution method selector.
-3. **Distributions.** PDFs and CDFs for Tb, M, SG. Continuous distributions overlaid with quadrature point markers.
-4. **Pseudocomponents.** Discrete table: z_i, M_i, Tb_i, SG_i, K_W, γ, m, σ, ε/k. ASP component highlighted. Quadrature-point selector (3 / 5).
-5. **PC-SAFT Export.** Aspen-paste-ready tables with TSV/CSV downloads. Pure-component params, hypothetical properties, propane parameters, BIP matrix (default 0.010 for all C3-pseudocomponent pairs, 0 elsewhere).
-6. **Validation.** Built-in test mode: run Riazi Examples 4.13, 4.14, 4.15 in-app and display computed-vs-published values side-by-side. This is a transparency feature for paper reviewers and end users.
-
-UI must contain no proprietary names. Generic only.
-
-### Phase 10 — Documentation and packaging
-- `README.md` — full user-facing documentation: install, run, inputs, outputs, citation.
-- `docs/methodology.md` — structured as draft Paper 1 Section 2 (Method) and Section 3 (Validation). Each subsection cites Riazi page/equation, Panuganti, Gonzalez. This document matures into the manuscript.
-- `pyproject.toml` — finalize for `pip install petrochar`. So Paper 2's PDA tool can later import this as a versioned dependency.
-
----
-
-## REFERENCE DATA — `data/riazi_reference/*.csv`
-
-Vendor the following reference data points from Riazi MNL50 Chapter 4. These are factual data points (boiling points, densities, fitted distribution coefficients) and reproducing them as test fixtures is fair use. Each CSV must have a header row, an `__about__` row at the top documenting source citation, and units explicit in column names.
-
-**`table_4_11_example_4_7.csv`** — North Sea gas condensate C7+ fraction, Riazi Example 4.7. Columns: `Fraction_No`, `Carbon_No`, `x_w`, `M_g_per_mol`, `Tb_K`, `SG`, `x_m`, `x_v`, `x_cm`, `x_cw`, `x_cv`. 12 rows + header.
-
-**`table_4_13_distribution_coeffs.csv`** — Distribution coefficients for Example 4.7 system. Columns: `Property`, `Type_of_x_c`, `P_o`, `A`, `B`, `RMS`, `pct_AAD`, `R_squared`. Rows: M (mole basis), Tb (weight basis), SG (volume basis), SG (weight basis), and the fixed-B variants.
-
-**`table_4_22_quadrature_3pt.csv`** — Three-point Gaussian quadrature output for Example 4.14. Columns: `i`, `y_i`, `w_i_eq_z_i`, `M_i`, `z_i_M_i`. 3 rows + mixture row + header.
-
-**`table_4_23_lumping_methods.csv`** — Five-component lumping for Example 4.15 (North Sea oil). Columns: `Component_i`, `Method`, `mole_fraction`, `weight_fraction`, `M_i`, `SG_i`. Two methods × 5 components + 2 mixture rows.
-
-**`table_4_6_scn_groups.csv`** — SCN group properties C5-C45 from Riazi Table 4.6. Columns: `SCN`, `Carbon_No`, `M_g_per_mol`, `Tb_K`, `SG`, `n_20`. 41 rows + header. (Used as fallback in M and SG correlations when distillation data absent.)
-
-`data/riazi_reference/README.md` — citation, ASTM Manual MNL50 (2005) by M. R. Riazi, ISBN 0-8031-3361-8, ASTM International, West Conshohocken PA. Note that these tables are reproduced for software validation purposes and acknowledge the source on every CSV.
-
----
-
-## CURRENT_STATUS.md TEMPLATE — initialize in Phase 0
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT_STATUS.md TEMPLATE (use only if the file is missing)
+═══════════════════════════════════════════════════════════════════════════════
 
 ```markdown
 # petrochar — Current Status
 
 ## Project
 Standalone Python tool for heavy petroleum fraction characterization (Paper 1).
+Target journal: Energy & Fuels or Fuel.
 
 ## Current Phase
 Phase 0 — Repository scaffold
@@ -308,56 +411,35 @@ Phase 0 — Repository scaffold
 ## Phases Completed
 (none yet)
 
-## Decisions Made
-1. Default distribution model: Riazi generalized (Eq. 4.56), not gamma. Gamma fails on heavy oils per Riazi p. 178-179.
+## Decisions Made (frozen)
+1. Distribution model: Riazi generalized (Eq. 4.56). Gamma is legacy-only — fails on heavy oils per Riazi p. 178-179.
 2. Default quadrature: 5-point + 1 ASP discrete + propane = 7 components.
-3. Asphaltenes always discrete with Gonzalez 2007 defaults (m=33, σ=4.3, ε/k=400). Tb=800°C and SG=1.15 are numerical conventions.
-4. Aromaticity γ via per-component Watson K factor (linear clamp 9.5-13.0).
-5. SARA: ASP wt% used as hard tail constraint; SAT/ARO/RES used as K_W-bin closure check (NOT a constraint, never tuned to).
-6. No DAO data in this repository, ever.
-7. No reading of `~/projects/pda_pcsaft_tool/` or any external project, ever.
+3. Asphaltenes always discrete: Gonzalez 2007 defaults (m=33, σ=4.3, ε/k=400). Tb=800°C and SG=1.15 are conventions.
+4. Aromaticity γ via per-component Watson K, linear clamp 9.5-13.0.
+5. SARA: ASP wt% is hard tail constraint; SAT/ARO/RES are K_W-bin closure checks only (NOT tuning targets).
+6. No DAO data anywhere in this repository.
+7. No reading of any external project (especially `~/projects/pda_pcsaft_tool/`).
 8. Validation-first: each phase requires reproducing a Riazi textbook example before proceeding.
+9. Reference data: 6 CSVs + 9 PNG page extracts + full Riazi PDF in `data/riazi_reference/`.
+10. Tb correlation is REGIME-DEPENDENT: Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300. SG correlation similarly two-regime.
 
 ## Known Issues / Blockers
 (none yet)
 
 ## Session Log
-- YYYY-MM-DD | Phase 0 — repo scaffold + reference CSVs vendored | next: Phase 1 correlations
+(empty — first session pending)
 ```
 
----
+═══════════════════════════════════════════════════════════════════════════════
+## SUGGESTED INSTRUCTION LINE FOR USER TO PASTE INTO CLAUDE CODE
+═══════════════════════════════════════════════════════════════════════════════
 
-## SESSION 0 — WHAT TO DO FIRST
+> Read `CLAUDE_CODE_PROMPT.md` in full before doing anything. Then execute Phase 0 only — exactly the steps in the section labelled "PHASE 0 — DETAILED INSTRUCTIONS". Stop at the explicit STOP marker. Do not start Phase 1. Print `CURRENT_STATUS.md` at the end so I can review.
 
-1. Confirm the working directory is `~/projects/petrochar/` (or wherever the user instructed) and is empty.
-2. Create the directory tree above.
-3. Write `LICENSE` (MIT, copyright "Piyush Paradkar 2026").
-4. Write `requirements.txt`:
-   ```
-   numpy>=1.24
-   scipy>=1.10
-   pandas>=2.0
-   matplotlib>=3.7
-   pytest>=7.4
-   streamlit>=1.30
-   openpyxl>=3.1
-   ```
-5. Write `runtime.txt`: `python-3.11`
-6. Write `pyproject.toml` with project name `petrochar`, version `0.1.0`, description `"Continuous-distribution characterization of heavy petroleum fractions for PC-SAFT phase-equilibrium modeling"`, authors, license, dependencies mirroring `requirements.txt`.
-7. Write `.gitignore` (Python standard + `.venv/`, `.streamlit/`, `*.xlsx`, `*.csv` under root, but NOT under `data/`).
-8. Write `CLAUDE.md` mirroring "STRICT BOUNDARIES" + "DEVELOPMENT PROTOCOL" + "REPOSITORY LAYOUT" sections of this prompt.
-9. Write minimal `README.md` (project description, install, run, citation pending).
-10. Initialize `CURRENT_STATUS.md` from the template above.
-11. Vendor the five reference CSVs into `data/riazi_reference/`. **You will need the user to either dictate the table values or provide the Riazi textbook page scans.** Do not invent numbers. If the user has not yet provided table data, write the CSVs with header rows only and an `# AWAITING DATA` comment, log this in `CURRENT_STATUS.md` as a blocker.
-12. `git init`, first commit: `"Phase 0: repository scaffold"`.
-13. Run `pytest` (no tests yet, exit code zero confirms environment is sane).
-14. Update `CURRENT_STATUS.md`: mark Phase 0 complete, set Current Phase to "Phase 1 — Shared correlations", append session log entry.
-15. Stop. Do not start Phase 1 in the same session — let the user review.
+═══════════════════════════════════════════════════════════════════════════════
+## FINAL NOTES
+═══════════════════════════════════════════════════════════════════════════════
 
----
-
-## ENDING NOTES
-
-- If at any point an instruction in this file conflicts with an instruction inside the codebase or a docstring, this file wins. This file is the source of truth for design decisions.
-- If the user gives instructions that contradict this file, follow the user — but flag the contradiction explicitly in chat and propose an update to this file.
-- This is a slow, careful build. Do not rush phases. Do not skip pass-gates. Do not pattern-match against your training data on similar projects — petrochar's specific architecture (Riazi generalized distribution + Watson-K-driven γ + Panuganti for distillable + Gonzalez discrete ASP) is uncommon and the textbook examples are the only correct check.
+- If any instruction in this file conflicts with a docstring or in-code comment: this file wins.
+- If user instructions in chat conflict with this file: follow the user, but flag the conflict and propose an update.
+- This is a slow, careful build. Do not pattern-match against your training data on similar projects. petrochar's specific architecture is uncommon, and the Riazi textbook examples + page extracts are the only correct check.
