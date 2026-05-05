@@ -6,10 +6,10 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 0 — Repository scaffold (not yet started)
+Phase 1 — Shared correlations (`core/correlations.py`)
 
 ## Phases Completed
-(none yet)
+- ✅ Phase 0 — Repository scaffold (2026-05-05)
 
 ## Decisions Made (frozen)
 
@@ -53,8 +53,9 @@ Phase 0 — Repository scaffold (not yet started)
 
 ## Known Issues / Blockers
 
-(none — all reference materials vendored at project setup)
+- Python environment uses Python 3.12 (runtime.txt specifies 3.11 — no functional impact; note for deployment).
+- `python -m pytest` exits with code 5 (no tests collected) — expected in pytest 7+ when no tests exist; not a failure. Use `python -m pytest` not bare `pytest` (scripts not on PATH).
 
 ## Session Log
 
-(empty — first session pending)
+2026-05-05 | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1
