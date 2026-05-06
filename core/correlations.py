@@ -147,6 +147,10 @@ def riazi_daubert_M(Tb_K: float, SG: float) -> float:
     return float(best_M)
 
 
+# Note: Riazi-Daubert §2.4.3.1 Eqs. 2.59 (Tb, I) and 2.60 (M, I) for direct SG
+# computation require refractivity index I, which is not a standard refinery
+# input. We numerically invert riazi_daubert_Tb instead. Verified 2026-05-06
+# against PDF pages 077-078; no I-free SG correlation exists in §2.4.3.1.
 def riazi_daubert_SG(M: float, Tb_K: float) -> float:
     """Compute specific gravity from molecular weight and normal boiling point.
 
