@@ -23,9 +23,10 @@ Phase 2 — Distillation curve conversion (`core/distillation.py`)
 7. **No reading external projects** (specifically `~/projects/pda_pcsaft_tool/` or any file outside this repo).
 8. **Validation-first:** each phase requires reproducing a Riazi textbook example before proceeding.
 9. **Repository name:** `petrochar`.
-10. **Tb correlation is REGIME-DEPENDENT:** Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300 (recommended for M > 300). **Critical correction; verified against PDF page extract.** Note: `riazi_daubert_SG` does NOT use Eqs. 2.59/2.60 (those require refractivity index I, not a standard refinery input); it numerically inverts `riazi_daubert_Tb` with regime-aware SG_min bracketing.
-12. **riazi_daubert_SG bracketing:** lower bracket = SG_min = -f/(c+d·M), analytically derived from d(ln Tb)/d(SG)=0. This is not 0.40 — the Eq. 2.56/2.57 forms are non-monotone in SG and have a minimum near SG~0.61-0.74.
-11. **Reference materials vendored:** full Riazi MNL50 PDF, 6 textbook tables as CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23), 9 PNG page extracts at 200 DPI for visual verification of equations during implementation.
+10. **Tb correlation is REGIME-DEPENDENT:** Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300 (recommended for M > 300). Critical correction; verified against page_077 PNG.
+11. **SG correlation method:** `riazi_daubert_SG` uses numerical inversion of `riazi_daubert_Tb`, NOT direct use of Eqs. 2.59/2.60. Reason: Eqs. 2.59 (inputs: Tb, I) and 2.60 (inputs: M, I) both require refractivity index I — confirmed by viewing page_077 and page_078 PNGs. No I-free direct SG correlation exists in §2.4.3.1. Implication for accuracy: SG error is bounded by Tb error × ∂SG/∂Tb (typically small). Phase 4 SG distribution does not rely on `riazi_daubert_SG` directly (it uses cumulative-fraction data and bulk closure), so this is not on the critical path.
+12. **SG bracketing for inversion:** Lower bracket = SG_min = -f/(c+d·M), analytically derived from d(ln Tb)/d(SG) = 0. The Eq. 2.56/2.57 forms are non-monotone in SG and have a minimum near SG~0.61-0.74; plain brentq on [0.40, 1.30] fails for all typical petroleum SG values.
+13. **Reference materials vendored:** full Riazi MNL50 PDF, 6 textbook tables as CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23), 9 PNG page extracts at 200 DPI for visual verification of equations during implementation.
 
 ## Reference Materials Inventory
 
