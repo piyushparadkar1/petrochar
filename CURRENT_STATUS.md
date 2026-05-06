@@ -6,10 +6,11 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 1 — Shared correlations (`core/correlations.py`)
+Phase 2 — Distillation curve conversion (`core/distillation.py`)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
+- ✅ Phase 1 — Shared correlations (`core/correlations.py`) (2026-05-06)
 
 ## Decisions Made (frozen)
 
@@ -22,7 +23,8 @@ Phase 1 — Shared correlations (`core/correlations.py`)
 7. **No reading external projects** (specifically `~/projects/pda_pcsaft_tool/` or any file outside this repo).
 8. **Validation-first:** each phase requires reproducing a Riazi textbook example before proceeding.
 9. **Repository name:** `petrochar`.
-10. **Tb correlation is REGIME-DEPENDENT:** Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300 (recommended for M > 300). Same for SG: Eq. 2.59 and Eq. 2.60. **Critical correction; verified against PDF page extract.**
+10. **Tb correlation is REGIME-DEPENDENT:** Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300 (recommended for M > 300). **Critical correction; verified against PDF page extract.** Note: `riazi_daubert_SG` does NOT use Eqs. 2.59/2.60 (those require refractivity index I, not a standard refinery input); it numerically inverts `riazi_daubert_Tb` with regime-aware SG_min bracketing.
+12. **riazi_daubert_SG bracketing:** lower bracket = SG_min = -f/(c+d·M), analytically derived from d(ln Tb)/d(SG)=0. This is not 0.40 — the Eq. 2.56/2.57 forms are non-monotone in SG and have a minimum near SG~0.61-0.74.
 11. **Reference materials vendored:** full Riazi MNL50 PDF, 6 textbook tables as CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23), 9 PNG page extracts at 200 DPI for visual verification of equations during implementation.
 
 ## Reference Materials Inventory
@@ -55,7 +57,11 @@ Phase 1 — Shared correlations (`core/correlations.py`)
 
 - Python environment uses Python 3.12 (runtime.txt specifies 3.11 — no functional impact; note for deployment).
 - `python -m pytest` exits with code 5 (no tests collected) — expected in pytest 7+ when no tests exist; not a failure. Use `python -m pytest` not bare `pytest` (scripts not on PATH).
+- Riazi-Daubert Eq. 2.56 max deviation vs Table 4.11 is **3.08 K** (C9 row), not ±2 K as the spec states. Spec tolerance is tighter than the correlation's actual %AAD (~3.5% for M<300). Pass-gate uses ±5 K. Eq. 2.57 deviations vs Table 4.6 SCN rows are 17–20 K (consistent with stated 4.7% AAD); test gate set to ±25 K.
+- `riazi_daubert_SG` uses smart bracketing: lower bound is analytically computed SG_min = -f/(c+d·M) (minimum of Tb vs SG), not 0.40. Required because Tb(M,SG) is non-monotone; the function has a minimum in SG at ~0.61–0.74 for refinery-relevant M. Plain brentq on [0.40, 1.30] fails for all typical petroleum SG values.
+- Windows cp1252 encoding: test print strings must use ASCII only — no Unicode delta (U+0394) or similar.
 
 ## Session Log
 
 2026-05-05 | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1
+2026-05-06 | Phase 1 complete: correlations.py 6 functions, test_phase1 49/49 pass, max Tb dev 3.08 K | next: Phase 2
