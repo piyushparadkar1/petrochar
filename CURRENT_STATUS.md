@@ -6,11 +6,12 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 2 — Distillation curve conversion (`core/distillation.py`)
+Phase 3 — Distribution fitting (`core/distribution.py`)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
 - ✅ Phase 1 — Shared correlations (`core/correlations.py`) (2026-05-06)
+- ✅ Phase 2 — Distillation curve conversion (`core/distillation.py`) (2026-05-06)
 
 ## Decisions Made (frozen)
 
@@ -27,6 +28,9 @@ Phase 2 — Distillation curve conversion (`core/distillation.py`)
 11. **SG correlation method:** `riazi_daubert_SG` uses numerical inversion of `riazi_daubert_Tb`, NOT direct use of Eqs. 2.59/2.60. Reason: Eqs. 2.59 (inputs: Tb, I) and 2.60 (inputs: M, I) both require refractivity index I — confirmed by viewing page_077 and page_078 PNGs. No I-free direct SG correlation exists in §2.4.3.1. Implication for accuracy: SG error is bounded by Tb error × ∂SG/∂Tb (typically small). Phase 4 SG distribution does not rely on `riazi_daubert_SG` directly (it uses cumulative-fraction data and bulk closure), so this is not on the critical path.
 12. **SG bracketing for inversion:** Lower bracket = SG_min = -f/(c+d·M), analytically derived from d(ln Tb)/d(SG) = 0. The Eq. 2.56/2.57 forms are non-monotone in SG and have a minimum near SG~0.61-0.74; plain brentq on [0.40, 1.30] fails for all typical petroleum SG values.
 13. **Reference materials vendored:** full Riazi MNL50 PDF, 6 textbook tables as CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23), 9 PNG page extracts at 200 DPI for visual verification of equations during implementation.
+14. **Daubert Eq. 3.20 exponent:** `1.0258` in Kelvin (NOT 0.9217 in °F — early PNG reading was wrong). Verified numerically: D86(50%)=479.85 K → TBP(50%)=483.75 K = 210.6°C, exactly matching Riazi MNL50 Table 3.8 kerosene Example 3.3. OCR rendered the exponent as `1~` (decimal truncated); PDF page 122 text confirms temperatures in Kelvin.
+15. **D1160_AET is a pass-through:** method tag changes to TBP, temperatures unchanged. Atmospheric equivalent temperature is already on a TBP-like basis.
+16. **to_weight_basis deferred to Phase 4:** raises ValueError for any non-weight basis input in Phase 2. SG distribution required for volume→weight; not available until Phase 4.
 
 ## Reference Materials Inventory
 
@@ -66,3 +70,4 @@ Phase 2 — Distillation curve conversion (`core/distillation.py`)
 
 2026-05-05 | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1
 2026-05-06 | Phase 1 complete: correlations.py 6 functions, test_phase1 49/49 pass, max Tb dev 3.08 K | next: Phase 2
+2026-05-06 | Phase 2 complete: distillation.py DistillationCurve class + Daubert D86→TBP, test_phase2 30/30 pass, kerosene Example 3.3 all +-5 K, 50% point within 0.02 K | next: Phase 3
