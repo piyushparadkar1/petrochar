@@ -28,7 +28,7 @@ Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distrib
 10. **Tb correlation is REGIME-DEPENDENT:** Eq. 2.56 for M ≤ 300, Eq. 2.57 for M > 300 (recommended for M > 300). Critical correction; verified against page_077 PNG.
 11. **SG correlation method:** `riazi_daubert_SG` uses numerical inversion of `riazi_daubert_Tb`, NOT direct use of Eqs. 2.59/2.60. Reason: Eqs. 2.59 (inputs: Tb, I) and 2.60 (inputs: M, I) both require refractivity index I — confirmed by viewing page_077 and page_078 PNGs. No I-free direct SG correlation exists in §2.4.3.1. Implication for accuracy: SG error is bounded by Tb error × ∂SG/∂Tb (typically small). Phase 4 SG distribution does not rely on `riazi_daubert_SG` directly (it uses cumulative-fraction data and bulk closure), so this is not on the critical path.
 12. **SG bracketing for inversion:** Lower bracket = SG_min = -f/(c+d·M), analytically derived from d(ln Tb)/d(SG) = 0. The Eq. 2.56/2.57 forms are non-monotone in SG and have a minimum near SG~0.61-0.74; plain brentq on [0.40, 1.30] fails for all typical petroleum SG values.
-13. **Reference materials vendored:** full Riazi MNL50 PDF, 6 textbook tables as CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23), 9 PNG page extracts at 200 DPI for visual verification of equations during implementation.
+13. **Reference materials:** 6 textbook table CSVs (4.6, 4.11, 4.13, 4.21, 4.22, 4.23) tracked in repo. Riazi MNL50 PDF and 9 PNG page extracts are NOT tracked (removed from all git history 2026-05-08 — copyrighted ASTM material). Must be obtained separately and placed in `data/riazi_reference/` locally; see README in that directory.
 14. **Daubert Eq. 3.20 exponent:** `1.0258` in Kelvin (NOT 0.9217 in °F — early PNG reading was wrong). Verified numerically: D86(50%)=479.85 K → TBP(50%)=483.75 K = 210.6°C, exactly matching Riazi MNL50 Table 3.8 kerosene Example 3.3. OCR rendered the exponent as `1~` (decimal truncated); PDF page 122 text confirms temperatures in Kelvin.
 15. **D1160_AET is a pass-through:** method tag changes to TBP, temperatures unchanged. Atmospheric equivalent temperature is already on a TBP-like basis.
 16. **to_weight_basis deferred to Phase 4:** raises ValueError for any non-weight basis input in Phase 2. SG distribution required for volume→weight; not available until Phase 4.
@@ -37,21 +37,11 @@ Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distrib
 
 `data/riazi_reference/` contains:
 
-**Full reference:**
-- `Riazi_MNL50_full.pdf` — complete book, 427 pages, ~12 MB
+**NOT in git (copyrighted ASTM material — purged from all history 2026-05-08):**
+- `Riazi_MNL50_full.pdf` — obtain from ASTM; place locally before implementing new phases.
+- `page_054_watson_k_eq_2_13.png` ... `page_183_table_4_5_4_6.png` — 9 PNG page extracts; generate with `pdftoppm -r 200 -png`.
 
-**Page extracts (PNG, 200 DPI):**
-- `page_054_watson_k_eq_2_13.png` — Eq. 2.13 (Watson K). Phase 1.
-- `page_077_riazi_daubert_Tb.png` — Eqs. 2.56, 2.57 (Tb), 2.59, 2.60 (SG). **Phase 1 critical reference.**
-- `page_078_riazi_daubert_Tb_continued.png` — continuation. Phase 1.
-- `page_122_daubert_d86_to_tbp.png` — Section 3.2.2.2, Eqs. 3.20-3.22, Table 3.7. Phase 2.
-- `page_123_daubert_d86_to_tbp.png` — continuation.
-- `page_124_daubert_d86_to_tbp.png` — continuation, Eqs. 3.23-3.25 (SD-to-TBP).
-- `page_181_table_4_5_4_6.png` — Table 4.5 SCN coefficients + Table 4.6 SCN data. Phase 4 fallback.
-- `page_182_table_4_5_4_6.png` — continuation.
-- `page_183_table_4_5_4_6.png` — continuation.
-
-**CSVs (textbook tables for validation tests):**
+**CSVs tracked in git (factual tabular data — textbook tables for validation tests):**
 - `table_4_6_scn_groups.csv` — SCN group properties C6-C50, fallback resource.
 - `table_4_11_example_4_7.csv` — North Sea gas condensate C7+ data. Phases 1, 3, 4 pass-gate.
 - `table_4_13_distribution_coeffs.csv` — Distribution coefficients (8 rows: 4 three-param + 4 two-param). Phases 3, 4.
