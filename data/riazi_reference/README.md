@@ -6,13 +6,18 @@ This folder contains reference materials transcribed and rasterized from:
 
 These materials enable petrochar's validation-first development protocol: every numerical correlation must be verified against the textbook before being used in production code.
 
-## Full reference
+## Full reference (NOT in repository)
 
-- **`Riazi_MNL50_full.pdf`** — complete 427-page book. Use only when a page outside the vendored extracts is needed; in that case, rasterize the relevant page yourself with `pdftoppm` and add it to this folder.
+> **`Riazi_MNL50_full.pdf` and all `page_*.png` files are NOT committed to this repository.**
+> They contain copyrighted ASTM material (Riazi MNL50, ISBN 0-8031-3361-8) and must be
+> obtained separately. Place them in this directory before running validation tests that
+> require page-level verification.
 
-## Page extracts (PNG, 200 DPI)
+**To obtain:**
+- Purchase *Characterization and Properties of Petroleum Fractions* by M. R. Riazi (ASTM MNL50, 2005) through ASTM International.
+- Generate PNG page extracts at 200 DPI using `pdftoppm -r 200 -png Riazi_MNL50_full.pdf page`.
 
-These are the equations and tables most frequently referenced during petrochar implementation:
+**Page extracts required for each phase:**
 
 | File | Section / Content | Phase |
 |------|-------------------|-------|
@@ -60,6 +65,10 @@ Riazi MNL50 §2.4.2.1 provides **two** Riazi-Daubert correlations for Tb:
 
 VTB pseudo-components span both ranges. The `riazi_daubert_Tb` function in petrochar must select correlation based on input M. Same for the inverse (`riazi_daubert_M`) and for SG (Eqs. 2.59 vs 2.60). See `page_077_riazi_daubert_Tb.png` for both equation forms.
 
-## Fair use
+## Citation
 
-These materials are reproduced strictly for software validation purposes. The full PDF is vendored for offline reference during development. If petrochar is published, the reference materials remain in the repository under standard academic fair use; users of petrochar should cite Riazi MNL50 in any work derived from this tool.
+All petroleum property correlations in petrochar are derived from:
+
+> Riazi, M. R. (2005). *Characterization and Properties of Petroleum Fractions*. ASTM Manual Series MNL50. ASTM International, West Conshohocken, PA. ISBN 0-8031-3361-8.
+
+Users of petrochar should cite this reference in any derived work.

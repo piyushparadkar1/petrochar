@@ -22,8 +22,10 @@ build/
 *.xlsx
 *.csv
 !data/riazi_reference/*.csv
-!data/riazi_reference/*.png
-!data/riazi_reference/*.pdf
+
+# Copyrighted ASTM material — must not be distributed publicly
+data/riazi_reference/*.pdf
+data/riazi_reference/page_*.png
 
 # OS
 .DS_Store
