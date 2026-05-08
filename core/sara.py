@@ -14,14 +14,25 @@ ARCHITECTURAL COMMITMENT (frozen):
 ASP wt% is the only SARA input that directly affects pseudo-component
 construction: it sets the mass fraction of the discrete asphaltene component.
 
-Convention — mixed z basis
---------------------------
-For distillable pseudo-components (from Phase 5), Pseudocomponent.z stores
-the mole fraction within the distillable subfraction (= Gauss-Laguerre
-weight).  For the discrete asphaltene, Pseudocomponent.z stores the WEIGHT
-FRACTION in the total feed (= asp_wt_pct / 100).  Asphaltene content is
-always specified on a mass basis; the mixed convention is resolved in Phase 7
-when all z values are converted to true mole fractions in the full mixture.
+Mole fraction convention
+------------------------
+After append_asphaltene() is called, ALL Pseudocomponent.z values are true
+mole fractions in the full mixture (distillable + asphaltene), summing to 1.
+
+append_asphaltene() performs the basis conversion internally.  The input
+distillable components carry z_i = Gauss-Laguerre weight (mole fraction
+within distillable subfraction).  Given ASP weight fraction f_asp:
+
+    M_dist_av = sum_i(z_i * M_i)          (mole-avg MW of distillable)
+    n_dist = (1 - f_asp) / M_dist_av      (moles of distillable per kg feed)
+    n_asp  = f_asp / M_asp                (moles of ASP per kg feed)
+    n_tot  = n_dist + n_asp
+
+    z_i_true = z_i * n_dist / n_tot       (rescaled distillable)
+    z_asp    = n_asp / n_tot              (ASP mole fraction)
+
+The xc_lower/xc_upper fields remain on a weight basis (consistent with
+Phase 5's cumulative weight-fraction convention).
 
 References
 ----------
@@ -120,16 +131,18 @@ def append_asphaltene(
     conventions.  The appended component occupies the heaviest tail:
     x_cw_lower = 1 - asp_wt_pct/100, x_cw_upper = 1.0.
 
-    Convention note
-    ---------------
-    Pseudocomponent.z for the asphaltene component stores the WEIGHT FRACTION
-    in the total feed (= asp_wt_pct / 100), not a mole fraction.  See module
-    docstring for the mixed-basis convention rationale.
+    All z values in the returned list are TRUE MOLE FRACTIONS in the full
+    mixture (distillable + asphaltene), summing to 1.  The input distillable
+    components carry z_i = mole fraction within distillable subfraction; this
+    function converts them to full-mixture mole fractions before returning.
+    See module docstring for the conversion formula.
 
     Parameters
     ----------
     components : list[Pseudocomponent]
         Distillable pseudo-components from discretize_generalized.
+        Each component's z must be a mole fraction within the distillable
+        subfraction (z values should sum to 1).
         Not modified in place; a new list is returned.
     asp_wt_pct : float
         Asphaltene content in wt%.  Must be in the open interval (0, 100).
@@ -144,7 +157,8 @@ def append_asphaltene(
     Returns
     -------
     list[Pseudocomponent]
-        Original components followed by the asphaltene component (new list).
+        New list of N+1 components with z values as true mole fractions in
+        the full mixture.  Original input list is not modified.
 
     References
     ----------
@@ -156,15 +170,39 @@ def append_asphaltene(
         )
 
     f_asp = asp_wt_pct / 100.0
+
+    # Mole-average MW of the distillable subfraction
+    # (z_i sum to 1 within distillable, so sum(z_i * M_i) = M_dist_av)
+    M_dist_av = float(sum(c.z * c.M for c in components))
+
+    # Moles of each subfraction per kg of total feed
+    n_dist = (1.0 - f_asp) / M_dist_av
+    n_asp  = f_asp          / M_asp
+    n_tot  = n_dist + n_asp
+
+    scale_dist = n_dist / n_tot    # multiplier converting distillable z to full-mixture z
+    z_asp      = n_asp  / n_tot
+
+    new_components = [
+        Pseudocomponent(
+            z=c.z * scale_dist,
+            M=c.M,
+            Tb_K=c.Tb_K,
+            SG=c.SG,
+            xc_lower=c.xc_lower,
+            xc_upper=c.xc_upper,
+        )
+        for c in components
+    ]
     asp_pc = Pseudocomponent(
-        z=f_asp,              # weight fraction in total feed (see convention note)
+        z=z_asp,
         M=M_asp,
         Tb_K=Tb_K_asp,
         SG=SG_asp,
         xc_lower=1.0 - f_asp,
         xc_upper=1.0,
     )
-    return list(components) + [asp_pc]
+    return new_components + [asp_pc]
 
 
 # ── K_W bin closure check ──────────────────────────────────────────────────────
@@ -191,14 +229,18 @@ def kw_bin_check(
     -------------------------
     Components with Tb_K > 1000 K are treated as asphaltene (not K_W-binned).
     This is consistent with the Gonzalez 2007 convention Tb_K = 1073.15 K.
-    For these components, z is interpreted as the weight fraction in the total
-    feed (Phase 6 convention; see module docstring).
-    Distillable components (Tb_K <= 1000 K) must have non-nan Tb_K and SG.
+    All z values are true mole fractions in the full mixture (as produced by
+    append_asphaltene).  Weight fractions are derived uniformly as
+    wt_i = z_i * M_i / M_mix, where M_mix = sum_j(z_j * M_j) over all
+    components.  Distillable components (Tb_K <= 1000 K) must have non-nan
+    Tb_K and SG.
 
     Parameters
     ----------
     components : list[Pseudocomponent]
         Pseudo-component list, typically produced by append_asphaltene().
+        All z values must be true mole fractions in the full mixture (summing
+        to 1), as returned by append_asphaltene().
         Distillable components (Tb_K <= 1000 K) must have Tb_K and SG set.
         Asphaltene components (Tb_K > 1000 K) are assigned to the ASP class.
     sara_wt_pct : dict
@@ -250,37 +292,31 @@ def kw_bin_check(
                 f"Assign Tb_K and SG values (Phase 7) before calling kw_bin_check."
             )
 
-    # ASP weight fraction in total feed (z stores weight fraction for ASP)
-    f_asp = float(sum(c.z for c in asp_comps))
-    f_dist = 1.0 - f_asp
+    # Mixture MW — z values are true mole fractions in the full mixture
+    M_mix = float(sum(c.z * c.M for c in components))
+
+    # Weight fraction of each component: wt_i = z_i * M_i / M_mix
+    def _wt(c: Pseudocomponent) -> float:
+        return c.z * c.M / M_mix
 
     if len(distillable) == 0:
         kw_calc = {
             'SAT': 0.0,
             'ARO': 0.0,
             'RES': 0.0,
-            'ASP': f_asp * 100.0,
+            'ASP': float(sum(_wt(c) for c in asp_comps)) * 100.0,
         }
     else:
-        # Distillable weight fractions within the distillable subfraction
-        z_arr = np.array([c.z for c in distillable])
-        M_arr = np.array([c.M for c in distillable])
-        zM      = z_arr * M_arr
-        x_wt_d  = zM / zM.sum()   # weight fraction within distillable; sums to 1
-
         # Watson K for each distillable component
         kw_arr = np.array([watson_k(c.Tb_K, c.SG) for c in distillable])
+        wt_arr = np.array([_wt(c) for c in distillable])
 
-        # Aggregate into total-feed wt% per K_W bin
-        sat_frac = float(np.sum(x_wt_d[kw_arr >= kw_sat]))
-        aro_frac = float(np.sum(x_wt_d[(kw_arr >= kw_aro) & (kw_arr < kw_sat)]))
-        res_frac = float(np.sum(x_wt_d[kw_arr < kw_aro]))
-
+        # Aggregate total-feed wt% per K_W bin
         kw_calc = {
-            'SAT': sat_frac * f_dist * 100.0,
-            'ARO': aro_frac * f_dist * 100.0,
-            'RES': res_frac * f_dist * 100.0,
-            'ASP': f_asp    * 100.0,
+            'SAT': float(np.sum(wt_arr[kw_arr >= kw_sat]))                       * 100.0,
+            'ARO': float(np.sum(wt_arr[(kw_arr >= kw_aro) & (kw_arr < kw_sat)])) * 100.0,
+            'RES': float(np.sum(wt_arr[kw_arr < kw_aro]))                         * 100.0,
+            'ASP': float(sum(_wt(c) for c in asp_comps))                          * 100.0,
         }
 
     sara_in = {k: float(sara_wt_pct[k]) for k in ('SAT', 'ARO', 'RES', 'ASP')}

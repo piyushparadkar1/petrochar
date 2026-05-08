@@ -9,19 +9,27 @@ Mole fractions z_i are chosen so that weight fractions in the total feed
 come out to exactly SAT=30, ARO=50, RES=15, ASP=5 wt%:
 
     M_dist_av = 0.95 / (0.8/400 + 0.15/600) = 422.22 g/mol
-    z_SAT = 1/3,  z_ARO = 5/9,  z_RES = 1/9   (sum to 1)
+    z_SAT = 1/3,  z_ARO = 5/9,  z_RES = 1/9   (sum to 1 within distillable)
 
-Tb_K values are set to yield exact K_W targets (K_W = Tb derived algebraically
+After append_asphaltene, all z_i are true mole fractions in the full mixture:
+
+    n_dist = 0.95 / 422.22 = 2.2497e-3  (moles/kg)
+    n_asp  = 0.05 / 1700   = 2.9412e-5  (moles/kg)
+    scale  = n_dist / (n_dist + n_asp)  ~= 0.9871
+    z_asp  = n_asp  / (n_dist + n_asp)  ~= 0.01290
+
+Tb_K values are set to yield exact K_W targets (K_W derived algebraically
 from K_W = (1.8*Tb)^(1/3) / SG, so no Riazi-Daubert approximation involved):
 
-    K_W = 13.0  (SG=0.81) → SAT bin  (K_W >= 12.0)
-    K_W = 11.5  (SG=0.91) → ARO bin  (11.0 <= K_W < 12.0)
-    K_W = 10.5  (SG=1.02) → RES bin  (K_W < 11.0)
+    K_W = 13.0  (SG=0.81) -> SAT bin  (K_W >= 12.0)
+    K_W = 11.5  (SG=0.91) -> ARO bin  (11.0 <= K_W < 12.0)
+    K_W = 10.5  (SG=1.02) -> RES bin  (K_W < 11.0)
 
 Pass criteria
 -------------
 - validate_sara: accepts valid inputs; raises on negative, >100, or bad sum.
-- append_asphaltene: ASP component has correct z, M, Tb_K, SG, xc bounds.
+- append_asphaltene: all z are true mole fractions, summing to 1.
+- append_asphaltene: ASP z equals computed mole fraction (not weight fraction).
 - kw_bin_check: per-class |delta| <= 3 wt% on clean synthetic input.
 - kw_bin_check: zero flags raised on clean synthetic input.
 - kw_bin_check: raises ValueError on missing SARA keys or nan Tb_K.
@@ -150,9 +158,19 @@ class TestAppendAsphaltene:
         asp = full_list[-1]
         assert asp.Tb_K > 1000.0
 
-    def test_asp_z_is_weight_fraction(self, full_list):
+    def test_asp_z_is_mole_fraction(self, full_list):
+        # z_asp = n_asp / (n_dist + n_asp); verify against analytical formula
+        M_dist_av = Z_SAT * M_SAT + Z_ARO * M_ARO + Z_RES * M_RES
+        f_asp = ASP_WT_PCT / 100.0
+        n_dist = (1.0 - f_asp) / M_dist_av
+        n_asp  = f_asp / ASP_M_DEFAULT
+        z_asp_expected = n_asp / (n_dist + n_asp)
         asp = full_list[-1]
-        assert abs(asp.z - ASP_WT_PCT / 100.0) < 1e-10
+        assert abs(asp.z - z_asp_expected) < 1e-10
+
+    def test_asp_z_is_not_weight_fraction(self, full_list):
+        asp = full_list[-1]
+        assert abs(asp.z - ASP_WT_PCT / 100.0) > 1e-4   # must differ from weight fraction
 
     def test_asp_M_default(self, full_list):
         asp = full_list[-1]
@@ -174,13 +192,23 @@ class TestAppendAsphaltene:
         asp = full_list[-1]
         assert abs(asp.xc_upper - 1.0) < 1e-10
 
-    def test_distillable_components_unchanged(self, full_list):
+    def test_distillable_M_Tb_SG_unchanged(self, full_list):
+        # M, Tb_K, SG must be preserved; z is rescaled to full-mixture mole fraction
         orig = _make_distillable()
         for orig_c, new_c in zip(orig, full_list[:-1]):
-            assert orig_c.z   == new_c.z
-            assert orig_c.M   == new_c.M
+            assert orig_c.M    == new_c.M
             assert orig_c.Tb_K == new_c.Tb_K
-            assert orig_c.SG  == new_c.SG
+            assert orig_c.SG   == new_c.SG
+
+    def test_distillable_z_rescaled(self, full_list):
+        # z_i are scaled DOWN by n_dist/n_tot (< 1); not equal to original
+        orig = _make_distillable()
+        for orig_c, new_c in zip(orig, full_list[:-1]):
+            assert new_c.z < orig_c.z   # scale_dist < 1 for any positive asp_wt_pct
+
+    def test_z_sums_to_one(self, full_list):
+        total = sum(c.z for c in full_list)
+        assert abs(total - 1.0) < 1e-10
 
     def test_returns_new_list(self):
         distillable = _make_distillable()
