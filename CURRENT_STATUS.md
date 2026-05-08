@@ -6,7 +6,7 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`)
+Phase 6 — PC-SAFT parameter assignment (`core/pcsaft_params.py`)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
@@ -14,6 +14,7 @@ Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`)
 - ✅ Phase 2 — Distillation curve conversion (`core/distillation.py`) (2026-05-06)
 - ✅ Phase 3 — Distribution fitting (`core/distribution.py`) (2026-05-08)
 - ✅ Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distribution.py`) (2026-05-08)
+- ✅ Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`) (2026-05-08)
 
 ## Decisions Made (frozen)
 
@@ -65,3 +66,4 @@ Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`)
 2026-05-06 | Phase 2 complete: distillation.py DistillationCurve class + Daubert D86→TBP, test_phase2 30/30 pass, kerosene Example 3.3 all +-5 K, 50% point within 0.02 K | next: Phase 3
 2026-05-08 | Copyright fix: Riazi PDF + 9 PNGs removed from git tracking, .gitignore updated, README updated with acquisition instructions | Phase 3 complete: distribution.py GeneralizedDistribution class, test_phase3 34/34 pass, T_o/A/B all within +-5% of Table 4.13 for both 3-param and 2-param Tb fits | next: Phase 4
 2026-05-08 | git history purge: filter-repo removed PDF and all page_*.png from all commits; force-pushed; all history SHAs rewritten | Phase 4 complete: sg_distribution.py + mw_distribution.py, test_phase4 32/32 pass, SG 3-param <0.1% of Table 4.13, M_av 0.43% of 118.9, SG_av 0.15% of 0.7597 | next: Phase 5
+2026-05-08 | Phase 5 complete: quadrature.py (quadrature_points, Pseudocomponent, discretize_generalized), distribution.py +from_params classmethod, test_phase5 37/37 pass, 182/182 total pass, 3-pt M_i all within 1% of Table 4.22, M_av 0.38% of 118.9 | next: Phase 6

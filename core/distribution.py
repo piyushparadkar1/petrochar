@@ -51,6 +51,44 @@ class GeneralizedDistribution:
         self._xc_fit: np.ndarray | None = None
         self._P_fit:  np.ndarray | None = None
 
+    # ── Factory ──────────────────────────────────────────────────────────────
+
+    @classmethod
+    def from_params(
+        cls,
+        P_o: float,
+        A: float,
+        B: float,
+    ) -> 'GeneralizedDistribution':
+        """Create a distribution with known parameters, bypassing fitting.
+
+        Useful when parameters are taken directly from a published table
+        (e.g., Riazi MNL50 Table 4.13 or Table 4.22 header) rather than
+        fitted from data.
+
+        Parameters
+        ----------
+        P_o : float   Onset parameter (property at x_c → 0).
+        A   : float   Scale parameter.
+        B   : float   Shape parameter.
+
+        Returns
+        -------
+        GeneralizedDistribution
+            Instance with P_o, A, B set; fit_quality will raise RuntimeError
+            because no data were fitted.
+
+        References
+        ----------
+        Riazi MNL50 Table 4.13 (page 173); Table 4.22 (page 186).
+        """
+        obj = cls()
+        obj.P_o   = float(P_o)
+        obj.A     = float(A)
+        obj.B     = float(B)
+        obj._mode = 'manual'
+        return obj
+
     # ── Fitting ───────────────────────────────────────────────────────────────
 
     def fit(
