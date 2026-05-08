@@ -6,7 +6,7 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 6 — PC-SAFT parameter assignment (`core/pcsaft_params.py`)
+Phase 7 — Watson K → γ + Panuganti correlations + PC-SAFT parameters (`core/pcsaft_params.py`)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
@@ -15,6 +15,7 @@ Phase 6 — PC-SAFT parameter assignment (`core/pcsaft_params.py`)
 - ✅ Phase 3 — Distribution fitting (`core/distribution.py`) (2026-05-08)
 - ✅ Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distribution.py`) (2026-05-08)
 - ✅ Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`) (2026-05-08)
+- ✅ Phase 6 — SARA closure check and asphaltene assembly (`core/sara.py`) (2026-05-08)
 
 ## Decisions Made (frozen)
 
@@ -34,6 +35,10 @@ Phase 6 — PC-SAFT parameter assignment (`core/pcsaft_params.py`)
 14. **Daubert Eq. 3.20 exponent:** `1.0258` in Kelvin (NOT 0.9217 in °F — early PNG reading was wrong). Verified numerically: D86(50%)=479.85 K → TBP(50%)=483.75 K = 210.6°C, exactly matching Riazi MNL50 Table 3.8 kerosene Example 3.3. OCR rendered the exponent as `1~` (decimal truncated); PDF page 122 text confirms temperatures in Kelvin.
 15. **D1160_AET is a pass-through:** method tag changes to TBP, temperatures unchanged. Atmospheric equivalent temperature is already on a TBP-like basis.
 16. **to_weight_basis deferred to Phase 4:** raises ValueError for any non-weight basis input in Phase 2. SG distribution required for volume→weight; not available until Phase 4.
+17. **`from_params` is public API:** GeneralizedDistribution.from_params() is documented as a public classmethod for instantiating from external parameters (published tables, external sources) without re-fitting. Not just a test utility.
+18. **Pseudocomponent.z mixed convention:** For distillable components, z = Gauss-Laguerre mole fraction within distillable subfraction. For the asphaltene component (appended by sara.append_asphaltene), z = weight fraction in total feed. Phase 7 resolves to true mole fractions before PC-SAFT export.
+19. **ASP Tb_K = 1073.15 K (800°C) is a numerical convention:** Asphaltenes do not boil. Value chosen to sort above all distillable pseudo-components. Asphaltene component identified in kw_bin_check by Tb_K > 1000 K threshold.
+20. **K_W bin thresholds are parameterizable conventions:** Default SAT >= 12.0, 11.0 <= ARO < 12.0, RES < 11.0 (Riazi p. 75). User can override via kw_sat/kw_aro parameters in kw_bin_check.
 
 ## Reference Materials Inventory
 
@@ -67,3 +72,4 @@ Phase 6 — PC-SAFT parameter assignment (`core/pcsaft_params.py`)
 2026-05-08 | Copyright fix: Riazi PDF + 9 PNGs removed from git tracking, .gitignore updated, README updated with acquisition instructions | Phase 3 complete: distribution.py GeneralizedDistribution class, test_phase3 34/34 pass, T_o/A/B all within +-5% of Table 4.13 for both 3-param and 2-param Tb fits | next: Phase 4
 2026-05-08 | git history purge: filter-repo removed PDF and all page_*.png from all commits; force-pushed; all history SHAs rewritten | Phase 4 complete: sg_distribution.py + mw_distribution.py, test_phase4 32/32 pass, SG 3-param <0.1% of Table 4.13, M_av 0.43% of 118.9, SG_av 0.15% of 0.7597 | next: Phase 5
 2026-05-08 | Phase 5 complete: quadrature.py (quadrature_points, Pseudocomponent, discretize_generalized), distribution.py +from_params classmethod, test_phase5 37/37 pass, 182/182 total pass, 3-pt M_i all within 1% of Table 4.22, M_av 0.38% of 118.9 | next: Phase 6
+2026-05-08 | Phase 6 complete: sara.py (validate_sara, append_asphaltene, kw_bin_check), test_phase6 57/57 pass, 239/239 total pass, K_W binning recovers SAT/ARO/RES/ASP wt% to <0.01 wt% on synthetic input, no retuning logic | next: Phase 7
