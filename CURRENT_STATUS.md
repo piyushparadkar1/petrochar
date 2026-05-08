@@ -6,12 +6,13 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 3 — Distribution fitting (`core/distribution.py`)
+Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distribution.py`)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
 - ✅ Phase 1 — Shared correlations (`core/correlations.py`) (2026-05-06)
 - ✅ Phase 2 — Distillation curve conversion (`core/distillation.py`) (2026-05-06)
+- ✅ Phase 3 — Distribution fitting (`core/distribution.py`) (2026-05-08)
 
 ## Decisions Made (frozen)
 
@@ -71,3 +72,4 @@ Phase 3 — Distribution fitting (`core/distribution.py`)
 2026-05-05 | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1
 2026-05-06 | Phase 1 complete: correlations.py 6 functions, test_phase1 49/49 pass, max Tb dev 3.08 K | next: Phase 2
 2026-05-06 | Phase 2 complete: distillation.py DistillationCurve class + Daubert D86→TBP, test_phase2 30/30 pass, kerosene Example 3.3 all +-5 K, 50% point within 0.02 K | next: Phase 3
+2026-05-08 | Copyright fix: Riazi PDF + 9 PNGs removed from git tracking, .gitignore updated, README updated with acquisition instructions | Phase 3 complete: distribution.py GeneralizedDistribution class, test_phase3 34/34 pass, T_o/A/B all within +-5% of Table 4.13 for both 3-param and 2-param Tb fits | next: Phase 4
