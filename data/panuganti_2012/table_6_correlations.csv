@@ -1,0 +1,24 @@
+# SOURCE: Panuganti S.R. et al. (2012) PC-SAFT characterization of crude oils and modeling of asphaltene phase behavior, Fuel 93, 658-669, Table 6, page 663
+# PC-SAFT correlations for saturates and aromatics+resins pseudo-components
+# Reference: correlations from Gonzalez D.L. and Ting P.D. (Gonzalez 2007 Energy Fuels 21, 1231; Ting 2003 Pet. Sci. Technol. 21, 647), reproduced in Panuganti 2012 Table 6
+#
+# Saturates: single correlation set, no aromaticity parameter
+# Aromatics+Resins: gamma-interpolated between gamma=0 (benzene derivative) and gamma=1 (PNA/poly-nuclear-aromatic)
+#
+# Formula: parameter = (1 - gamma) * benzene_derivative_form + gamma * PNA_form
+#
+# Units: m dimensionless, sigma in Angstrom (denoted A in paper), epsilon_over_k in K, MW in g/mol
+# Note: ln in the saturate sigma form is natural log
+# Note: ln on left-hand side of saturate epsilon_over_k means compute as exp(5.5769 - 9.523/MW)
+#
+# Format: each row gives the parameter, the component class, the formula in functional form, and a Python-evaluable string
+Parameter,Component_class,Functional_form,Python_form
+m,Saturates,m = 0.0257 * MW + 0.8444,0.0257*MW + 0.8444
+sigma_Angstrom,Saturates,sigma = 4.047 - 4.8013 * ln(MW) / MW,4.047 - 4.8013*math.log(MW)/MW
+epsilon_over_k_K,Saturates,ln(epsilon/k) = 5.5769 - 9.523/MW,math.exp(5.5769 - 9.523/MW)
+m,AromaticResins_benzene_derivative_endpoint_gamma_0,m_g0 = 0.0223 * MW + 0.751,0.0223*MW + 0.751
+m,AromaticResins_PNA_endpoint_gamma_1,m_g1 = 0.0101 * MW + 1.7296,0.0101*MW + 1.7296
+sigma_Angstrom,AromaticResins_benzene_derivative_endpoint_gamma_0,sigma_g0 = 4.1377 - 38.1483/MW,4.1377 - 38.1483/MW
+sigma_Angstrom,AromaticResins_PNA_endpoint_gamma_1,sigma_g1 = 4.6169 - 93.98/MW,4.6169 - 93.98/MW
+epsilon_over_k_K,AromaticResins_benzene_derivative_endpoint_gamma_0,eps_g0 = 0.00436 * MW + 283.93,0.00436*MW + 283.93
+epsilon_over_k_K,AromaticResins_PNA_endpoint_gamma_1,eps_g1 = 508 - 234100/MW^1.5,508 - 234100/MW**1.5

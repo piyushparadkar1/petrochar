@@ -1,0 +1,41 @@
+# SOURCE: Panuganti S.R. et al. (2012) PC-SAFT characterization of crude oils and modeling of asphaltene phase behavior, Fuel 93, 658-669, Tables 10, 11, 12, pages 663-664
+# PC-SAFT characterized parameters for Crudes A, B, C as published in Panuganti 2012
+# Used as Phase 7 numerical pass-gate: plug (MW, gamma) into petrochar's Panuganti Table 6 implementation, compare (m, sigma, epsilon/k) to these values
+# Tolerance: +/- 1% on m, +/- 0.5% on sigma, +/- 2% on epsilon/k
+#
+# Asphaltene parameters in this table are the ADJUSTED values (fitted to AOP data) per Panuganti's procedure.
+# petrochar uses INITIAL Gonzalez 2007 defaults (m=33, sigma=4.3, eps/k=400) without AOP fitting.
+# Asphaltene rows are reported here for completeness; petrochar Phase 7 does NOT validate against the adjusted values.
+#
+# Heavy gas: petrochar does not produce a heavy gas pseudocomponent (this is a feature of Panuganti's gas-phase characterization, not petrochar's residue-fraction-only scope).
+# Phase 7 pass-gate uses only Saturates and Aromatics+Resins rows.
+#
+# Units: MW (g/mol), mol_pct dimensionless %, m dimensionless, sigma (Angstrom), epsilon_over_k (K), gamma dimensionless (aromaticity parameter)
+Crude,Component,MW_g_per_mol,mol_pct,m,sigma_Angstrom,epsilon_over_k_K,gamma
+A,N2,28.04,0.163,1.206,3.313,90.96,
+A,CO2,44.01,1.944,2.073,2.785,169.21,
+A,C1,16.04,33.600,1.000,3.704,150.03,
+A,C2,30.07,7.557,1.607,3.520,191.42,
+A,C3,44.10,6.742,2.002,3.618,208.11,
+A,Heavy_gas,65.49,8.198,2.530,3.740,228.51,
+A,Saturates,167.68,31.743,5.150,3.900,249.69,
+A,Aromatics_plus_Resins,253.79,9.907,6.410,3.990,285.00,0.0
+A,Asphaltenes_adjusted,1700.00,0.133,32.998,4.203,353.50,
+B,N2,28.04,0.169,1.206,3.313,90.96,
+B,CO2,44.01,2.096,2.073,2.785,169.21,
+B,C1,16.04,34.865,1.000,3.704,150.03,
+B,C2,30.07,7.578,1.607,3.520,191.42,
+B,C3,44.10,6.042,2.002,3.618,208.11,
+B,Heavy_gas,67.12,7.560,2.570,3.750,229.32,
+B,Saturates,176.08,34.152,5.370,3.910,250.36,
+B,Aromatics_plus_Resins,256.14,7.527,6.360,4.000,293.30,0.05
+B,Asphaltenes_adjusted,1700.00,0.010,37.220,4.493,413.54,
+C,N2,28.04,0.147,1.206,3.313,90.96,
+C,CO2,44.01,1.716,2.073,2.785,169.21,
+C,C1,16.04,32.558,1.000,3.704,150.03,
+C,C2,30.07,7.889,1.607,3.520,191.42,
+C,C3,44.10,7.287,2.002,3.618,208.11,
+C,Heavy_gas,66.36,9.310,2.550,3.740,228.95,
+C,Saturates,169.17,32.630,5.190,3.900,249.81,
+C,Aromatics_plus_Resins,234.78,8.456,5.570,4.030,319.70,0.22
+C,Asphaltenes_adjusted,1700.00,0.007,35.750,4.484,413.42,

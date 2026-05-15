@@ -1,0 +1,11 @@
+# SOURCE: Panuganti S.R. et al. (2012) PC-SAFT characterization of crude oils and modeling of asphaltene phase behavior, Fuel 93, 658-669, Table 5, page 662
+# PC-SAFT parameters for light components in crude oil
+# Reference: values originally from Gross J. and Sadowski G. (2001) Ind. Eng. Chem. Res. 40, 1244, reproduced in Panuganti 2012 Table 5
+# Units: MW (g/mol), m dimensionless, sigma (Angstrom), epsilon_over_k (K)
+Component,MW_g_per_mol,m,sigma_Angstrom,epsilon_over_k_K
+N2,28.04,1.206,3.313,90.96
+CO2,44.01,2.073,2.785,169.21
+H2S,34.08,1.6517,3.0737,227.34
+C1,16.04,1.000,3.704,150.03
+C2,30.07,1.607,3.520,191.42
+C3,44.10,2.002,3.618,208.11

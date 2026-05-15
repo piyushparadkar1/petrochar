@@ -22,6 +22,7 @@ build/
 *.xlsx
 *.csv
 !data/riazi_reference/*.csv
+!data/panuganti_2012/*.csv
 
 # Copyrighted ASTM material — must not be distributed publicly
 data/riazi_reference/*.pdf
@@ -40,3 +41,6 @@ Thumbs.db
 # Environment
 .env
 *.env
+
+# Panuganti 2012 paper (copyrighted)
+data/panuganti_2012/*.pdf
