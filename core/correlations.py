@@ -93,6 +93,22 @@ def riazi_daubert_M(Tb_K: float, SG: float) -> float:
     input Tb within tolerance is returned; if both brackets find roots the one
     with the smaller residual is preferred.
 
+    Regime 2 (Eq. 2.57) non-monotone correction
+    --------------------------------------------
+    Eq. 2.57 Tb(M, SG) has a maximum at M_peak = 0.5369 / (7.5152e-4*SG -
+    1.6514e-4) (from d(ln Tb)/dM = 0).  The function rises from M=300 to
+    M_peak, then falls.  Using the full bracket [300, 2000] fails whenever
+    the target Tb is between Tb(300) and Tb(M_peak), because both endpoints
+    can have the same sign.  Fix: limit the bracket to the ascending branch
+    [300.01, M_peak * 0.9999] where Tb is strictly increasing.
+
+    Regime-gap fallback
+    -------------------
+    Eq. 2.56 and Eq. 2.57 are discontinuous at M=300 for some (Tb, SG)
+    combinations.  If the target Tb falls strictly between Eq.2.56(300)
+    and Eq.2.57(300+), no exact root exists in either regime.  The boundary
+    M=300 is returned with a UserWarning as the best available estimate.
+
     Parameters
     ----------
     Tb_K : float
@@ -127,24 +143,57 @@ def riazi_daubert_M(Tb_K: float, SG: float) -> float:
     except Exception:
         pass
 
-    # Regime 2 — Eq. 2.57, M in (300, 2000]
+    # Regime 2 — Eq. 2.57, M in (300, ~2000]
+    # Tb(M) is non-monotone: max at M_peak = 0.5369 / (7.5152e-4*SG - 1.6514e-4).
+    # Use ascending branch [300.01, M_peak*0.9999] only to guarantee sign change.
     try:
+        denom_57 = 7.5152e-4 * SG - 1.6514e-4
+        if denom_57 > 0.0:
+            # Descending branch exists; confine search to ascending branch.
+            M_peak_57 = 0.5369 / denom_57
+            M_hi_57 = min(M_peak_57 * 0.9999, 1990.0)
+        else:
+            # No finite peak; Tb monotone increasing throughout → safe to use 1990.
+            M_hi_57 = 1990.0
         f_lo = residual(300.01)
-        f_hi = residual(2000.0)
+        f_hi = residual(M_hi_57)
         if f_lo * f_hi <= 0:
-            M_57 = optimize.brentq(residual, 300.01, 2000.0, xtol=0.01, rtol=1e-6)
+            M_57 = optimize.brentq(residual, 300.01, M_hi_57, xtol=0.01, rtol=1e-6)
             res_57 = abs(residual(M_57))
             if res_57 < best_res:
                 best_M, best_res = M_57, res_57
     except Exception:
         pass
 
-    if best_M is None:
-        raise ValueError(
-            f"riazi_daubert_M: no root found for Tb_K={Tb_K:.2f} K, "
-            f"SG={SG:.4f}. Check that inputs are in the valid range."
-        )
-    return float(best_M)
+    if best_M is not None:
+        return float(best_M)
+
+    # ── Regime-gap fallback ────────────────────────────────────────────────────
+    # Occurs when Eq.2.56(M=300) < Tb_K < Eq.2.57(M=300+), i.e. the target
+    # Tb falls in the correlation discontinuity at the regime boundary.
+    # Return M=300 (boundary) as the closest available estimate.
+    try:
+        f_56_at_300  = residual(300.0)    # evaluates using Eq. 2.56
+        f_57_at_300p = residual(300.01)   # evaluates using Eq. 2.57
+        if f_56_at_300 < 0.0 < f_57_at_300p:
+            Tb_56_max = riazi_daubert_Tb(300.0,  SG)   # Eq. 2.56 at boundary
+            Tb_57_min = riazi_daubert_Tb(300.01, SG)   # Eq. 2.57 at boundary
+            warnings.warn(
+                f"riazi_daubert_M: Tb_K={Tb_K:.2f} K falls in the regime-transition "
+                f"gap (Eq.2.56 gives {Tb_56_max:.1f} K, Eq.2.57 gives "
+                f"{Tb_57_min:.1f} K at M=300).  Returning M=300 as boundary "
+                f"estimate; uncertainty ~1-5% in M.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return 300.0
+    except Exception:
+        pass
+
+    raise ValueError(
+        f"riazi_daubert_M: no root found for Tb_K={Tb_K:.2f} K, "
+        f"SG={SG:.4f}. Check that inputs are in the valid range."
+    )
 
 
 # Note: Riazi-Daubert §2.4.3.1 Eqs. 2.59 (Tb, I) and 2.60 (M, I) for direct SG
