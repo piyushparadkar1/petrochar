@@ -6,7 +6,7 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 7 — Watson K → γ + Panuganti correlations + PC-SAFT parameters (`core/pcsaft_params.py`)
+Phase 8 — next (TBD)
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
@@ -16,6 +16,7 @@ Phase 7 — Watson K → γ + Panuganti correlations + PC-SAFT parameters (`core
 - ✅ Phase 4 — SG and MW distributions (`core/sg_distribution.py`, `core/mw_distribution.py`) (2026-05-08)
 - ✅ Phase 5 — Gaussian quadrature discretization (`core/quadrature.py`) (2026-05-08)
 - ✅ Phase 6 — SARA closure check and asphaltene assembly (`core/sara.py`) (2026-05-08)
+- ✅ Phase 7 — Watson K → γ + PC-SAFT parameters (`core/watson_k.py`, `core/pcsaft_params.py`) (2026-05-15)
 
 ## Decisions Made (frozen)
 
@@ -39,6 +40,9 @@ Phase 7 — Watson K → γ + Panuganti correlations + PC-SAFT parameters (`core
 18. **Pseudocomponent.z is always a true mole fraction in the full mixture:** After sara.append_asphaltene() is called, ALL z values (distillable + ASP) are true mole fractions summing to 1. append_asphaltene performs the basis conversion internally: z_i_true = z_i * n_dist/n_tot; z_asp = n_asp/n_tot where n_dist = (1-f_asp)/M_dist_av, n_asp = f_asp/M_asp. Phase 7 can use z directly without any further conversion.
 19. **ASP Tb_K = 1073.15 K (800°C) is a numerical convention:** Asphaltenes do not boil. Value chosen to sort above all distillable pseudo-components. Asphaltene component identified in kw_bin_check by Tb_K > 1000 K threshold.
 20. **K_W bin thresholds are parameterizable conventions:** Default SAT >= 12.0, 11.0 <= ARO < 12.0, RES < 11.0 (Riazi p. 75). User can override via kw_sat/kw_aro parameters in kw_bin_check.
+21. **γ-from-Watson-K is a deliberate architectural deviation from Panuganti 2012 — must be disclosed in Paper 1 §2:** Panuganti defines γ as a free parameter fitted simultaneously to crude density and bubble-point pressure (Panuganti 2012, p. 4). petrochar uses a deterministic per-component mapping: γ = clamp((13.0 − K_W) / (13.0 − 9.5), 0, 1), derived from Watson K (Watson & Nelson 1933). This eliminates the need for AOP data entirely but introduces a source of systematic error relative to Panuganti's fitted values — the deviation must be stated explicitly in the Paper 1 methodology section. The single γ-interpolated A+R correlation (Panuganti Table 6, rows 4–9) is used for ALL distillable components; the separate Saturates form (rows 1–3) is retained only in `panuganti_saturate_params` for reference and independent testing.
+22. **Panuganti reference data vendored:** `data/panuganti_2012/` contains four CSVs (table_5_light_component_pcsaft_params.csv, table_6_correlations.csv, tables_10_11_12_crude_pcsaft.csv, README.md). The PDF is gitignored (copyrighted). CSVs are tracked via `!data/panuganti_2012/*.csv` exception in .gitignore.
+23. **Propane σ = 3.6180 Å (NOT 3.168):** The value 3.168 appears in some Aspen Plus built-in databases as a transcription error (14% wrong). The correct value from Gross & Sadowski 2001, reproduced in Panuganti Table 5, is 3.618 Å. This is explicitly guarded by `test_sigma_is_not_aspen_typo` in the Phase 7 test suite.
 
 ## Reference Materials Inventory
 
@@ -74,3 +78,4 @@ Phase 7 — Watson K → γ + Panuganti correlations + PC-SAFT parameters (`core
 2026-05-08 | Phase 5 complete: quadrature.py (quadrature_points, Pseudocomponent, discretize_generalized), distribution.py +from_params classmethod, test_phase5 37/37 pass, 182/182 total pass, 3-pt M_i all within 1% of Table 4.22, M_av 0.38% of 118.9 | next: Phase 6
 2026-05-08 | Phase 6 complete: sara.py (validate_sara, append_asphaltene, kw_bin_check), test_phase6 57/57 pass, 239/239 total pass, K_W binning recovers SAT/ARO/RES/ASP wt% to <0.01 wt% on synthetic input, no retuning logic | next: Phase 7
 2026-05-08 | Phase 6 z-convention fix: append_asphaltene now converts all z to true full-mixture mole fractions (uniform basis), kw_bin_check updated to use z_i*M_i/M_mix uniformly; test_phase6 60/60 pass, 242/242 total pass | next: Phase 7
+2026-05-15 | Phase 7 complete: watson_k.py (compute_K_W_per_pseudocomponent), pcsaft_params.py (panuganti_saturate_params, panuganti_aromatic_resin_params, panuganti_distillable_params, gonzalez_asphaltene_params, propane_params, generate_pcsaft_table), quadrature.py extended with K_W/gamma fields; test_phase7 71/71 pass, 314/314 total pass; A+R params within 1%/0.5%/2% of Panuganti Tables 10-12 for Crudes A/B/C | next: Phase 8

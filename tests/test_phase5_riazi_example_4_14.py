@@ -108,10 +108,16 @@ class TestPseudomponentDataclass:
         assert pc.xc_lower == 0.2
         assert pc.xc_upper == 0.5
 
-    def test_six_fields_only(self):
+    def test_eight_fields_present(self):
+        # Phase 5 original fields plus K_W and gamma added in Phase 7.
         pc = Pseudocomponent(z=0.5, M=100.0)
-        expected = {'z', 'M', 'Tb_K', 'SG', 'xc_lower', 'xc_upper'}
+        expected = {'z', 'M', 'Tb_K', 'SG', 'xc_lower', 'xc_upper', 'K_W', 'gamma'}
         assert set(pc.__dataclass_fields__) == expected
+
+    def test_kw_gamma_default_none(self):
+        pc = Pseudocomponent(z=0.5, M=100.0)
+        assert pc.K_W is None
+        assert pc.gamma is None
 
 
 # ── 3-point discretization (Riazi Table 4.22) ────────────────────────────────

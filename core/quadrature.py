@@ -28,6 +28,7 @@ Riazi (2005) : §4.6.1.1, Table 4.21 (quadrature roots/weights),
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -84,19 +85,26 @@ class Pseudocomponent:
 
     Fields
     ------
-    z        : mole fraction (= Gauss-Laguerre weight w_i).
+    z        : mole fraction (= Gauss-Laguerre weight w_i, or full-mixture
+               mole fraction after sara.append_asphaltene is called).
     M        : molecular weight, g/mol (sub-fraction average via Eq. 4.84).
     Tb_K     : normal boiling point, K.  nan if not yet assigned.
     SG       : specific gravity at 15.5 degC.  nan if not yet assigned.
     xc_lower : lower bound of cumulative weight-fraction interval [0, 1).
     xc_upper : upper bound of cumulative weight-fraction interval (0, 1].
+    K_W      : Watson K factor.  None until compute_K_W_per_pseudocomponent
+               (Phase 7) is called.
+    gamma    : aromaticity factor gamma in [0, 1]; 0 = paraffinic, 1 = PNA.
+               None until compute_K_W_per_pseudocomponent is called.
     """
     z:        float
     M:        float
-    Tb_K:     float = float('nan')
-    SG:       float = float('nan')
-    xc_lower: float = 0.0
-    xc_upper: float = 0.0
+    Tb_K:     float          = float('nan')
+    SG:       float          = float('nan')
+    xc_lower: float          = 0.0
+    xc_upper: float          = 0.0
+    K_W:      Optional[float] = None
+    gamma:    Optional[float] = None
 
 
 # ── Discretization ────────────────────────────────────────────────────────────
