@@ -3,15 +3,17 @@ PC-SAFT parameter assignment for petroleum pseudo-components.
 
 Three parameter sources:
 
-1. Distillable pseudo-components (Tb_K <= 1000 K):
+1. Distillable pseudo-components (is_asphaltene=False):
    Panuganti 2012 Table 6 gamma-interpolated correlations.
    gamma-interpolation spans gamma=0 (benzene-derivative/paraffinic)
    to gamma=1 (PNA/poly-nuclear-aromatic).
 
-2. Asphaltene discrete component (Tb_K > 1000 K):
+2. Asphaltene discrete component (is_asphaltene=True):
    Gonzalez 2007 nanoaggregate initial defaults — m=33, sigma=4.3 A,
    eps/k=400 K.  These are the INITIAL values before AOP fitting in
    Panuganti's procedure.  petrochar does not fit to AOP data.
+   Asphaltenes are identified by the is_asphaltene flag (set exclusively
+   by sara.append_asphaltene), NOT by a Tb > 1000 K threshold.
 
 3. Propane (pure component, from Table 5):
    m=2.002, sigma=3.6180 A, eps/k=208.11 K.
@@ -63,9 +65,11 @@ _C3_M      =   2.002   # dimensionless
 _C3_SIGMA  =   3.6180  # Angstrom; NOT 3.168 (Aspen typo)
 _C3_EPSK   = 208.11    # K
 
-# ── Asphaltene Tb threshold (consistent with core/sara.py convention) ─────────
+# ── Guard threshold: distillable pseudo-components must not exceed this Tb ────
+# Tb_K > this value for a distillable (is_asphaltene=False) component is a
+# characterisation error (distribution extrapolation beyond physical range).
 
-_ASP_TB_THRESHOLD = 1000.0   # K; Tb_K > threshold → asphaltene
+_DISTILLABLE_TB_MAX = 1000.0   # K; raise ValueError if exceeded by non-ASP
 
 
 # ── Saturates (Panuganti Table 6, rows 1-3) ───────────────────────────────────
@@ -239,8 +243,14 @@ def generate_pcsaft_table(
     """Assign PC-SAFT parameters to all pseudo-components; return DataFrame.
 
     For each component:
-    - If Tb_K > 1000 K (asphaltene convention): gonzalez_asphaltene_params().
+    - If is_asphaltene=True: gonzalez_asphaltene_params().
     - Otherwise (distillable): panuganti_distillable_params(M, gamma).
+
+    Asphaltene identity is determined by the is_asphaltene flag (set by
+    sara.append_asphaltene), NOT by a Tb threshold.  If any distillable
+    component (is_asphaltene=False) has Tb_K > 1000 K, a ValueError is
+    raised — this indicates a characterisation error (distribution
+    extrapolation producing unphysical pseudo-component properties).
 
     Requires K_W and gamma to be populated on each distillable component
     (i.e., compute_K_W_per_pseudocomponent must have been called first).
@@ -264,12 +274,24 @@ def generate_pcsaft_table(
     """
     rows = []
     for i, c in enumerate(components):
-        is_asp = (not math.isnan(c.Tb_K)) and (c.Tb_K > _ASP_TB_THRESHOLD)
-
-        if is_asp:
+        if c.is_asphaltene:
             m, sigma, epsk = gonzalez_asphaltene_params()
             comp_type = 'asphaltene'
         else:
+            # Guard: distillable pseudo-components must have physical Tb values.
+            # Tb > 1000 K for a distillable component signals that the distribution
+            # extrapolated beyond the measured distillation range into a regime
+            # where Riazi-Daubert is unreliable.  Raise hard error rather than
+            # silently reclassifying as asphaltene (Decision 1, Phase 8 rework).
+            if not math.isnan(c.Tb_K) and c.Tb_K > _DISTILLABLE_TB_MAX:
+                raise ValueError(
+                    f"generate_pcsaft_table: distillable component {i} "
+                    f"(M={c.M:.1f} g/mol) has Tb_K={c.Tb_K:.1f} K > "
+                    f"{_DISTILLABLE_TB_MAX:.0f} K.  This indicates the M or "
+                    f"Tb distribution extrapolated beyond the measured range. "
+                    f"Use 3-parameter distribution fits; asphaltenes must be "
+                    f"added exclusively via sara.append_asphaltene()."
+                )
             if c.gamma is None:
                 raise ValueError(
                     f"generate_pcsaft_table: component {i} (M={c.M:.1f}) "

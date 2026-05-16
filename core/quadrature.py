@@ -85,26 +85,34 @@ class Pseudocomponent:
 
     Fields
     ------
-    z        : mole fraction (= Gauss-Laguerre weight w_i, or full-mixture
-               mole fraction after sara.append_asphaltene is called).
-    M        : molecular weight, g/mol (sub-fraction average via Eq. 4.84).
-    Tb_K     : normal boiling point, K.  nan if not yet assigned.
-    SG       : specific gravity at 15.5 degC.  nan if not yet assigned.
-    xc_lower : lower bound of cumulative weight-fraction interval [0, 1).
-    xc_upper : upper bound of cumulative weight-fraction interval (0, 1].
-    K_W      : Watson K factor.  None until compute_K_W_per_pseudocomponent
-               (Phase 7) is called.
-    gamma    : aromaticity factor gamma in [0, 1]; 0 = paraffinic, 1 = PNA.
-               None until compute_K_W_per_pseudocomponent is called.
+    z             : mole fraction (= Gauss-Laguerre weight w_i, or full-mixture
+                    mole fraction after sara.append_asphaltene is called).
+    M             : molecular weight, g/mol (sub-fraction average via Eq. 4.84).
+    Tb_K          : normal boiling point, K.  nan if not yet assigned.
+    SG            : specific gravity at 15.5 degC.  nan if not yet assigned.
+    xc_lower      : lower bound of cumulative weight-fraction interval [0, 1).
+    xc_upper      : upper bound of cumulative weight-fraction interval (0, 1].
+    K_W           : Watson K factor.  None until compute_K_W_per_pseudocomponent
+                    (Phase 7) is called.
+    gamma         : aromaticity factor gamma in [0, 1]; 0 = paraffinic, 1 = PNA.
+                    None until compute_K_W_per_pseudocomponent is called.
+    is_asphaltene : True if and only if this component was added by
+                    sara.append_asphaltene().  False for all distillable
+                    pseudo-components from discretize_generalized().
+                    Asphaltene identification must use this flag, NOT a Tb
+                    threshold.  Distillable components with Tb > 1000 K are a
+                    characterisation error and raise ValueError in
+                    generate_pcsaft_table.
     """
-    z:        float
-    M:        float
-    Tb_K:     float          = float('nan')
-    SG:       float          = float('nan')
-    xc_lower: float          = 0.0
-    xc_upper: float          = 0.0
-    K_W:      Optional[float] = None
-    gamma:    Optional[float] = None
+    z:             float
+    M:             float
+    Tb_K:          float          = float('nan')
+    SG:            float          = float('nan')
+    xc_lower:      float          = 0.0
+    xc_upper:      float          = 0.0
+    K_W:           Optional[float] = None
+    gamma:         Optional[float] = None
+    is_asphaltene: bool            = False
 
 
 # ── Discretization ────────────────────────────────────────────────────────────

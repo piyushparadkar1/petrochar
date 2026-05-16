@@ -191,6 +191,7 @@ def append_asphaltene(
             SG=c.SG,
             xc_lower=c.xc_lower,
             xc_upper=c.xc_upper,
+            is_asphaltene=c.is_asphaltene,   # preserve any pre-existing flag
         )
         for c in components
     ]
@@ -201,6 +202,7 @@ def append_asphaltene(
         SG=SG_asp,
         xc_lower=1.0 - f_asp,
         xc_upper=1.0,
+        is_asphaltene=True,                  # explicit flag; never set by quadrature
     )
     return new_components + [asp_pc]
 
@@ -227,13 +229,14 @@ def kw_bin_check(
 
     Asphaltene identification
     -------------------------
-    Components with Tb_K > 1000 K are treated as asphaltene (not K_W-binned).
-    This is consistent with the Gonzalez 2007 convention Tb_K = 1073.15 K.
+    Components are classified as asphaltene via the `is_asphaltene` flag,
+    which is set exclusively by sara.append_asphaltene().  The Tb > 1000 K
+    heuristic is NOT used; using it would silently reclassify quadrature
+    nodes that extrapolate beyond the distillation data range.
     All z values are true mole fractions in the full mixture (as produced by
     append_asphaltene).  Weight fractions are derived uniformly as
     wt_i = z_i * M_i / M_mix, where M_mix = sum_j(z_j * M_j) over all
-    components.  Distillable components (Tb_K <= 1000 K) must have non-nan
-    Tb_K and SG.
+    components.  Distillable components must have non-nan Tb_K and SG.
 
     Parameters
     ----------
@@ -241,8 +244,8 @@ def kw_bin_check(
         Pseudo-component list, typically produced by append_asphaltene().
         All z values must be true mole fractions in the full mixture (summing
         to 1), as returned by append_asphaltene().
-        Distillable components (Tb_K <= 1000 K) must have Tb_K and SG set.
-        Asphaltene components (Tb_K > 1000 K) are assigned to the ASP class.
+        Distillable components (is_asphaltene=False) must have Tb_K and SG set.
+        Asphaltene components (is_asphaltene=True) are assigned to the ASP class.
     sara_wt_pct : dict
         Keys: 'SAT', 'ARO', 'RES', 'ASP'; values: measured wt%.
     kw_sat : float
@@ -280,9 +283,11 @@ def kw_bin_check(
     if missing:
         raise ValueError(f"sara_wt_pct is missing required keys: {missing}.")
 
-    # Separate ASP (Tb_K > 1000 K convention) from distillable
-    asp_comps   = [c for c in components if not math.isnan(c.Tb_K) and c.Tb_K > 1000.0]
-    distillable = [c for c in components if not (not math.isnan(c.Tb_K) and c.Tb_K > 1000.0)]
+    # Separate ASP from distillable using the explicit is_asphaltene flag.
+    # The Tb > 1000 K heuristic is NOT used here; asphaltene identity is set
+    # exclusively by sara.append_asphaltene() via is_asphaltene=True.
+    asp_comps   = [c for c in components if c.is_asphaltene]
+    distillable = [c for c in components if not c.is_asphaltene]
 
     # Validate distillable components have Tb_K and SG populated
     for i, c in enumerate(distillable):

@@ -455,11 +455,12 @@ class TestGeneratePCSAFTTable:
 
     @pytest.fixture
     def mixed_components(self, distillable_components):
-        """Two distillable + one asphaltene (Tb_K=1073.15)."""
+        """Two distillable + one asphaltene (Tb_K=1073.15, is_asphaltene=True)."""
         asp = Pseudocomponent(
             z=0.02, M=1700.0, Tb_K=1073.15, SG=1.15,
             xc_lower=0.98, xc_upper=1.0,
-            K_W=10.5, gamma=0.7,   # K_W/gamma set (compute would give them too)
+            K_W=10.5, gamma=0.7,        # K_W/gamma set for completeness
+            is_asphaltene=True,         # required: asphaltene identity is flag-based
         )
         return distillable_components[:2] + [asp]
 
