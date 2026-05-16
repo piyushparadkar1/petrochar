@@ -6,7 +6,7 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-Phase 10 — final docs + pyproject packaging
+COMPLETE — all phases 0-10 done. Next: Paper 1 drafting.
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
@@ -19,6 +19,7 @@ Phase 10 — final docs + pyproject packaging
 - ✅ Phase 7 — Watson K → γ + PC-SAFT parameters (`core/watson_k.py`, `core/pcsaft_params.py`) (2026-05-15)
 - ✅ Phase 8 — End-to-end pipeline integration test + validation report (reworked 2026-05-16)
 - ✅ Phase 9 — Streamlit UI: 6 tabs, app.py + tabs/*.py (2026-05-16)
+- ✅ Phase 10 — Final docs, packaging, D7169 fix (2026-05-16)
 
 ## Decisions Made (frozen)
 
@@ -82,29 +83,48 @@ Phase 10 — final docs + pyproject packaging
 
 ## Phase 9 deferred items (scope-creep rule enforced)
 
-The following were noted during Phase 9 implementation but deliberately NOT built
-(scope-creep rule: if you find yourself thinking "this would be nice to have," stop
-and put it in a TODO list):
+Classified into three subsections. "Paper 1 disclosures" must appear in the paper
+before submission. "Pre-submission fixes" are bugs addressed in Phase 10.
+"Future enhancements" do not affect publishability.
 
-- **Volume/mole basis conversion in Tab 1:** `to_weight_basis()` raises ValueError for
-  non-weight inputs (Phase 2 design — SG distribution needed). Expose conversion in UI
-  once Phase 4 volume→weight path is wired through the pipeline. Current workaround:
-  warn the user in Tab 1 and block pipeline run if basis != 'weight'.
-- **Generalized SG distribution UI path:** Tab 1 has a "Generalized SG distribution"
-  option in the selector but it falls back to constant Watson K with an info message.
-  Full wiring deferred — requires (xc_vol, SG) measured pairs as a second CSV upload.
-- **PDF figure save-to-file buttons:** Tabs 2 and 3 show matplotlib figures as PNG via
-  st.image(). Adding a "Download figure" button (save as PDF/SVG for Paper 1) is a
-  natural next step. Deferred — not in Phase 9 spec.
-- **D7169 TBP conversion:** Tab 1 shows D7169 as a method option but raises ValueError
-  on pipeline run (not implemented in Phase 2). UI should disable the option or show a
-  hard warning. Deferred to Phase 10 docs cleanup or a separate fix session.
-- **Component name customization in Tab 5:** PC1, PC2, ..., ASP, C3 are generated
-  automatically. Letting the user rename components for Aspen Plus consistency is a
-  minor UX improvement. Deferred.
-- **Binary k_ij uncertainty guidance:** The default propane k_ij = 0.010 is a
-  literature starting point. A brief note with the Panuganti 2012 Table 11-12 fitted
-  values for reference crudes would help users calibrate. Deferred to docs.
+### Paper 1 disclosures required
+
+- **Constant Watson K only in current UI:** The generalized SG distribution
+  (Riazi Eq. 4.56 fitted to volume-basis SG data) is architecturally supported by
+  `core/sg_distribution.py` but is not exposed in the current pipeline because it
+  requires per-cut SG measurements not routinely available for heavy residue streams.
+  The current implementation uses the constant Watson K method exclusively.
+  Paper 1 §2 disclosure: state this as a deliberate scope decision with stated reason,
+  not a gap. Under constant Watson K, all distillable components share K_W_bulk —
+  SAT/ARO/RES K_W-bin classification is degenerate by construction; users who need
+  finer SARA classification should supply per-cut SG data and use generalized mode
+  (future version).
+- **Weight-basis distillation input only:** `to_weight_basis()` raises ValueError for
+  volume and mole basis inputs (Phase 2 design — SG distribution needed for conversion).
+  The `DistillationCurve` class supports the basis tag architecturally, but the
+  volume→weight conversion path is not wired through the current pipeline.
+  Paper 1 §2 disclosure: "The current pipeline requires weight-basis distillation data.
+  Volume-basis input is supported by the underlying DistillationCurve class but requires
+  density-distribution input not exposed in the current pipeline."
+
+### Pre-submission fixes (addressed in Phase 10)
+
+- **D7169 option raises ValueError silently:** Tab 1 shows D7169 as a method option
+  but triggers an unhandled exception on pipeline run (Phase 2 D7169→TBP conversion
+  not implemented). Fix: keep D7169 visible (signals architectural intent) but show
+  st.warning() and disable the Run button when selected. Fixed in Phase 10.
+
+### Future enhancements (no Paper 1 impact)
+
+- **PDF/SVG figure download buttons:** Tabs 2-3 render matplotlib figures as PNG via
+  st.image(). For Paper 1 figure generation, write a standalone script calling
+  core/ functions directly with matplotlib.pyplot.savefig(). Add UI download button
+  only after knowing which figures make the paper.
+- **Component name customization in Tab 5:** PC1, PC2, ..., ASP, C3 are
+  auto-generated. User-editable names for Aspen Plus compatibility is a UX improvement.
+- **k_ij calibration guidance:** Default propane k_ij=0.010 is a literature starting
+  point. A reference table from Panuganti 2012 Tables 11-12 fitted values for Crudes
+  A/B/C would help users calibrate for specific feeds. Add to docs, not to UI.
 
 ## Session Log
 
@@ -120,3 +140,4 @@ and put it in a TODO list):
 2026-05-15 | Phase 8 complete: riazi_daubert_M non-monotone bracket fix + regime-gap fallback; tests/test_phase8_pipeline.py 40/40 pass + 6 xfail (documented limitations); docs/validation_report.md written (draft for Paper 1 Section 3); total 354 passed, 6 xfailed | next: Phase 9
 2026-05-16 | Phase 8 rework: self-consistent (M,K_W)→(Tb,SG) solve (Decision 25); is_asphaltene flag replaces Tb>1000K threshold everywhere (Decision 26); M_av gate vs analytic mean not M_DIST_TARGET (Decision 27); K_W-bin tests restricted to ASP+closure (Decision 28); all 6 xfail removed; validation_report.md updated; total 372 passed, 0 xfailed | next: Phase 9
 2026-05-16 | Phase 9 complete: app.py + 6 tab files; boot health=ok; 372 passed (unchanged); forbidden-terms 0 hits | next: Phase 10
+2026-05-16 | Phase 10 complete: README.md, docs/methodology.md, CHANGELOG.md, pyproject.toml PyPI-ready, petrochar/_cli.py, D7169 fix; pip install -e . OK; 372 passed; 0 forbidden-term hits | IMPLEMENTATION COMPLETE

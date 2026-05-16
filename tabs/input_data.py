@@ -240,14 +240,24 @@ def render(ss) -> None:
             "Distillation method",
             options=["D1160_AET", "TBP", "D86", "D7169"],
             index=0,
-            help="D1160_AET and TBP are pass-throughs. D86 uses Daubert conversion.",
+            help=(
+                "D1160_AET and TBP are pass-throughs (temperatures unchanged). "
+                "D86 uses Daubert Eqs. 3.20-3.22 conversion. "
+                "D7169 (simulated distillation) is architecturally supported "
+                "but the conversion path is not yet implemented."
+            ),
         )
     with col_basis:
         basis = st.selectbox(
             "Basis",
             options=["weight", "volume", "mole"],
             index=0,
-            help="Only 'weight' basis is fully supported in this version.",
+            help=(
+                "Only 'weight' basis is fully supported. The DistillationCurve "
+                "class carries the basis tag for volume and mole, but the "
+                "density-distribution conversion is not wired through the "
+                "current pipeline."
+            ),
         )
     with col_unit:
         temp_unit = st.selectbox(
@@ -256,10 +266,23 @@ def render(ss) -> None:
             index=0,
         )
 
+    # D7169 warning — Option B: keep visible, warn, disable run button.
+    # Signals architectural intent without crashing the pipeline.
+    _d7169_selected = (method == "D7169")
+    if _d7169_selected:
+        st.warning(
+            "**D7169 (simulated distillation) input is not yet implemented in "
+            "the pipeline.** The `DistillationCurve` class supports D7169 "
+            "architecturally, but the Phase 2 D7169 → TBP conversion path is "
+            "not wired through. Use **D1160_AET**, **D86**, or **TBP** for now."
+        )
+
     if basis != "weight":
         st.warning(
-            "Non-weight bases require a SG distribution for conversion (Phase 4 "
-            "deferred to weight basis). Only weight basis is fully operational."
+            "Non-weight basis: the DistillationCurve class carries the basis tag, "
+            "but the volume/mole → weight conversion requires a density distribution "
+            "not exposed in the current pipeline. Only **weight** basis is fully "
+            "operational."
         )
 
     input_mode = st.radio(
@@ -437,12 +460,16 @@ def render(ss) -> None:
     # ── Run pipeline button ───────────────────────────────────────────────────
     st.divider()
 
-    run_disabled = bool(_warnings)
+    run_disabled = bool(_warnings) or _d7169_selected
     if st.button(
         "Run pipeline",
         type="primary",
         disabled=run_disabled,
-        help="Blocked until all input warnings are resolved." if run_disabled else "",
+        help=(
+            "D7169 conversion is not yet implemented — select a different method."
+            if _d7169_selected
+            else ("Blocked until all input warnings are resolved." if _warnings else "")
+        ),
     ):
         sara_dict = {
             "SAT": float(sara_sat),

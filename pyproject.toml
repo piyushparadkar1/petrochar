@@ -1,14 +1,31 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "petrochar"
 version = "0.1.0"
 description = "Continuous-distribution characterization of heavy petroleum fractions for PC-SAFT phase-equilibrium modeling from routine refinery data"
-authors = [{ name = "Piyush Paradkar" }]
+readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11"
+authors = [
+    { name = "Piyush Paradkar", email = "piyushparadkar1@gmail.com" }
+]
+keywords = [
+    "petroleum", "characterization", "PC-SAFT", "asphaltene",
+    "distillation", "pseudo-component", "heavy oil"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
@@ -21,9 +38,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
 
+[project.urls]
+Homepage = "https://github.com/piyushparadkar/petrochar"
+"Bug Tracker" = "https://github.com/piyushparadkar/petrochar/issues"
+Documentation = "https://github.com/piyushparadkar/petrochar/blob/main/docs/methodology.md"
+
+[project.scripts]
+petrochar = "petrochar._cli:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "tabs*"]
+include = ["core*", "tabs*", "petrochar*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
