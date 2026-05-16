@@ -126,6 +126,34 @@ before submission. "Pre-submission fixes" are bugs addressed in Phase 10.
   point. A reference table from Panuganti 2012 Tables 11-12 fitted values for Crudes
   A/B/C would help users calibrate for specific feeds. Add to docs, not to UI.
 
+## Post-implementation Hotfixes
+
+### Hotfix 1 — 2026-05-16: `riazi_daubert_M` above-peak fallback + xlsx upload
+
+**Problem:** Real VTB feed (SG_bulk~1.04, D1160 endpoint at ~610°C = 883.15 K) crashed
+with `"riazi_daubert_M: no root found for Tb_K=883.15 K, SG=1.0404"`. Root cause:
+Eq. 2.57 Tb(M, SG) peaks at M_peak≈870 g/mol for SG=1.0404; the corresponding
+Tb_peak≈871 K. The 95% cut at 610°C = 883 K exceeds the peak — no ascending-branch
+root exists.
+
+**Fix 1 (`core/correlations.py`):** Added "above-peak fallback" after the regime-gap
+fallback. If target Tb_K > Tb_peak computed from riazi_daubert_Tb(M_peak, SG), return
+M_peak with a UserWarning ("returning M_peak as upper-bound estimate; uncertainty may
+exceed 10%"). Consistent with the existing regime-gap fallback pattern. No regressions:
+372/372 tests pass.
+
+**Fix 2 (`tabs/input_data.py`):** Changed `st.file_uploader(type="csv")` to
+`type=["csv", "xlsx"]`. Added extension check: `.xlsx` → `pd.read_excel(sheet_name=0)`,
+otherwise `pd.read_csv`. Error message updated to name required columns.
+Radio label updated to "Upload CSV / Excel".
+
+**Decision 29:** Above-peak M = M_peak is a deliberate upper-bound convention, not an
+interpolation. Callers that wrap `compute_M_array` in `warnings.catch_warnings(ignore)`
+will receive M_peak silently for any cut beyond the correlation validity range. This is
+acceptable for VTB fractions where the 90-95% tail is already extrapolated territory.
+
+---
+
 ## Session Log
 
 2026-05-05 | Phase 0 complete: scaffold + Riazi materials vendored + git initialised | next: Phase 1
@@ -141,3 +169,4 @@ before submission. "Pre-submission fixes" are bugs addressed in Phase 10.
 2026-05-16 | Phase 8 rework: self-consistent (M,K_W)→(Tb,SG) solve (Decision 25); is_asphaltene flag replaces Tb>1000K threshold everywhere (Decision 26); M_av gate vs analytic mean not M_DIST_TARGET (Decision 27); K_W-bin tests restricted to ASP+closure (Decision 28); all 6 xfail removed; validation_report.md updated; total 372 passed, 0 xfailed | next: Phase 9
 2026-05-16 | Phase 9 complete: app.py + 6 tab files; boot health=ok; 372 passed (unchanged); forbidden-terms 0 hits | next: Phase 10
 2026-05-16 | Phase 10 complete: README.md, docs/methodology.md, CHANGELOG.md, pyproject.toml PyPI-ready, petrochar/_cli.py, D7169 fix; pip install -e . OK; 372 passed; 0 forbidden-term hits | IMPLEMENTATION COMPLETE
+2026-05-16 | Hotfix 1: riazi_daubert_M above-peak fallback (no crash for Tb>Tb_peak at SG~1.04); xlsx upload support in Tab 1; 372 passed; 0 forbidden-term hits | Decision 29 added

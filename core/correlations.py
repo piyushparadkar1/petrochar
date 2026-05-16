@@ -190,6 +190,34 @@ def riazi_daubert_M(Tb_K: float, SG: float) -> float:
     except Exception:
         pass
 
+    # ── Above-peak fallback (Eq. 2.57 Tb > Tb_max(SG)) ───────────────────────
+    # Eq. 2.57 Tb(M, SG) reaches a global maximum Tb_peak at M_peak =
+    # 0.5369 / (7.5152e-4·SG − 1.6514e-4).  When Tb_K > Tb_peak the target
+    # boiling point is physically beyond the correlation's range, which occurs
+    # for very heavy, high-SG VTB cuts (e.g. Tb > 870 K at SG ≈ 1.04).
+    # Return M_peak as the best-available (upper-bound) estimate, consistent
+    # with the regime-gap fallback pattern above.  A UserWarning is raised so
+    # callers can log or suppress it.
+    try:
+        denom_57_fb = 7.5152e-4 * SG - 1.6514e-4
+        if denom_57_fb > 0.0:
+            M_peak_fb   = 0.5369 / denom_57_fb
+            if M_peak_fb >= 300.0:
+                Tb_peak_fb = riazi_daubert_Tb(M_peak_fb, SG)
+                if Tb_K > Tb_peak_fb:
+                    warnings.warn(
+                        f"riazi_daubert_M: Tb_K={Tb_K:.2f} K exceeds the maximum Tb "
+                        f"achievable by Riazi-Daubert Eq. 2.57 at SG={SG:.4f} "
+                        f"(Tb_peak={Tb_peak_fb:.1f} K at M_peak={M_peak_fb:.1f} g/mol). "
+                        f"This cut is beyond the correlation's valid range; returning "
+                        f"M_peak as upper-bound estimate.  Uncertainty may exceed 10%.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    return float(M_peak_fb)
+    except Exception:
+        pass
+
     raise ValueError(
         f"riazi_daubert_M: no root found for Tb_K={Tb_K:.2f} K, "
         f"SG={SG:.4f}. Check that inputs are in the valid range."

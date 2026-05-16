@@ -287,35 +287,46 @@ def render(ss) -> None:
 
     input_mode = st.radio(
         "Data entry",
-        options=["Manual entry (template)", "Upload CSV"],
+        options=["Manual entry (template)", "Upload CSV / Excel"],
         horizontal=True,
         label_visibility="collapsed",
     )
 
-    if input_mode == "Upload CSV":
+    if input_mode == "Upload CSV / Excel":
         uploaded = st.file_uploader(
-            "CSV with columns: cumulative_fraction (0-100) and temperature",
-            type="csv",
-            help="Header row required. cumulative_fraction in %, temperature in the selected unit.",
+            "CSV or Excel (.xlsx) with columns: cumulative_fraction (0–100) and temperature",
+            type=["csv", "xlsx"],
+            help=(
+                "Header row required.  Column names must be exactly "
+                "'cumulative_fraction' (percent distilled) and 'temperature' "
+                "(in the unit selected above).  For Excel, the first sheet is read."
+            ),
         )
         if uploaded is not None:
             try:
-                df_upload = pd.read_csv(uploaded)
+                fname = uploaded.name.lower()
+                if fname.endswith(".xlsx"):
+                    df_upload = pd.read_excel(uploaded, sheet_name=0)
+                else:
+                    df_upload = pd.read_csv(uploaded)
+
                 if "cumulative_fraction" not in df_upload.columns or "temperature" not in df_upload.columns:
                     st.error(
-                        "CSV must have columns 'cumulative_fraction' and 'temperature'. "
-                        f"Found: {list(df_upload.columns)}"
+                        "File must have columns named **'cumulative_fraction'** and "
+                        "**'temperature'** (exact match, case-sensitive).  "
+                        f"Columns found: {list(df_upload.columns)}.  "
+                        "Rename your columns and re-upload."
                     )
-                    pct_raw    = np.array(_TEMPLATE_PCT, dtype=float)
-                    temp_raw   = np.array(_TEMPLATE_T_C, dtype=float)
-                    has_data   = False
+                    pct_raw  = np.array(_TEMPLATE_PCT, dtype=float)
+                    temp_raw = np.array(_TEMPLATE_T_C, dtype=float)
+                    has_data = False
                 else:
                     pct_raw  = df_upload["cumulative_fraction"].values.astype(float)
                     temp_raw = df_upload["temperature"].values.astype(float)
                     has_data = True
-                    st.success(f"Loaded {len(pct_raw)} points.")
+                    st.success(f"Loaded {len(pct_raw)} points from {uploaded.name}.")
             except Exception as exc:
-                st.error(f"CSV read error: {exc}")
+                st.error(f"File read error: {exc}")
                 pct_raw  = np.array(_TEMPLATE_PCT, dtype=float)
                 temp_raw = np.array(_TEMPLATE_T_C, dtype=float)
                 has_data = False
