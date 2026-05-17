@@ -467,12 +467,99 @@ required before publication and is outside the current scope.
 
 ## 7. Test Suite Summary
 
-    372 passed, 0 xfailed  (run time ~2 s on Python 3.12, Windows)
-    5 UserWarnings (expected; from riazi_daubert_M regime-gap fallbacks)
+    405 passed, 1 skipped (closure-driven natural-ordering check)
+                          (run time ~5-7 s on Python 3.12, Windows)
+    13-22 UserWarnings (expected; riazi_daubert_M regime-gap and above-peak
+                        fallbacks, plus Phase 11 ascending-branch caps)
     0 errors, 0 unexpected failures
 
 Command: `python -m pytest` from repository root.
 
 ---
 
-*End of validation report. Next step: Paper 1 Section 2 draft (methodology).*
+## 8. Phase 11 — Recovery-Aware Quadrature with Heavy-Resin Lump (2026-05-17)
+
+### 8.1 Motivation
+
+Phases 1-10 assumed `recovery_fraction = 1.0` — the distillation curve covers
+the full feed mass.  Real VTB / vacuum-residue feeds typically cut off at
+~70-80 % recovery because the heavy tail is beyond the thermal-cracking limit
+(~720 °C bath temperature in ASTM D1160).  Phase 11 introduces a user-supplied
+`recovery_fraction` ∈ (0, 1] and a single discrete **heavy-resin lump** that
+absorbs the unmeasured tail.
+
+### 8.2 New decisions
+
+- **Decision 30 — recovery-aware quadrature:** xc rescaled by 1/recovery_fraction;
+  M distribution characterizes the distillable subfraction only; HR lump
+  carries the unmeasured tail mass.  `recovery_fraction = 1.0` is the Phase 8
+  pass-through path.
+- **Decision 31 — closure-driven HR properties:** M_hr, SG_hr fixed by exact
+  mass-balance closure on bulk MW (number-average) and bulk SG (volume-
+  additive).  Tb_hr from constant Watson K (capped at 1100 K).  Bulk MW and
+  bulk SG become hard closure constraints (supersedes Decision 27).
+- **Decision 32 — ascending-branch-only solve:** the self-consistent (Tb, SG)
+  solve caps M_i > M_peak(SG_at_Tb_hi) at Tb_hi = 990 K to prevent
+  descending-branch lock-on and preserve Tb monotonicity across GL nodes.
+
+### 8.3 VTB 15/12/25 reference snapshot
+
+| Quantity | Value | Note |
+|---|---|---|
+| recovery_fraction | 0.707 | distillation cut at 70.7 % |
+| ASP wt% | 17.4 | from SARA |
+| f_hr | 11.9 % | = 1 − 0.707 − 0.174 |
+| Bulk MW | 728.9 g/mol | input (hard constraint) |
+| Bulk SG | 1.031 | input (hard constraint) |
+| K_W_bulk | 11.23 | derived from bulk MW/SG |
+| M_dist_av | 640 g/mol | mole-avg of 5 GL nodes |
+| M_hr | 719 g/mol | closure-driven (Eq. 2.32) |
+| SG_hr | 0.917 | closure-driven (Eq. 2.33) |
+| Tb_hr | 608 K | (K_W · SG_hr)^3 / 1.8 |
+| Bulk MW recovery | < 0.001 % | exact closure |
+| Bulk SG recovery | < 0.001 % | exact closure |
+
+Three of five GL nodes (#3, #4, #5 with M = 1075, 1386, 1736 g/mol) exceed
+Eq. 2.57's M_peak ≈ 831 g/mol and are capped at Tb = 990 K under the
+ascending-branch-only solve (Decision 32).  These nodes contribute a combined
+z ≈ 0.064 (mole basis) and < 0.5 % of the feed mass.
+
+### 8.4 Pass-gate
+
+`tests/test_phase11_recovery_aware.py` — 32 active tests + 1 closure-driven
+skip across 7 classes:
+
+1. `TestRecoveryEqualsOneRegression` — recovery=1.0 reproduces Phase 8 bit-exactly.
+2. `TestMassBalanceClosure` — VTB 15/12/25 bulk MW and SG recovered to < 0.1 %.
+3. `TestDistillableTbMonotone` — Tb non-decreasing across all distillable nodes.
+4. `TestClosureFailureMessages` — inconsistent inputs raise ValueError with
+   `"bulk MW closure"` / `"bulk SG closure"` in the message text.
+5. `TestEdgeCaseNoHeavyResin` — `f_hr ≈ 0` dispatches to the Phase 8 path.
+6. `TestEdgeCaseRecoveryPlusASPExceedsOne` — overlap raises ValueError with
+   `"Reduce recovery_fraction"` guidance.
+7. `TestHeavyResinLumpPCSAFTUsesAR_form` — HR uses Panuganti A+R γ-interpolated
+   correlations, not Gonzalez asphaltene defaults.
+8. `TestVTB_15_12_25_FullPipeline` — full pipeline + snapshot comparison
+   against `tests/reference/vtb_15_12_25_expected.csv` (M, Tb, SG, m, σ, ε/k
+   tolerances 0.1–2 %).
+
+### 8.5 Paper 1 §2.5.3 disclosure
+
+petrochar's heavy-resin lump is **closure-driven** under the constant Watson K
+assumption.  The lump absorbs the unmeasured distillation tail; its molecular
+weight and specific gravity are fixed by mass-balance equalities on bulk MW
+and bulk SG respectively.  Its boiling point is derived from K_W_bulk —
+switching to a fitted SG distribution would require an alternative HR-Tb
+assignment (constant Watson K is load-bearing for the HR lump in Phase 11).
+
+A practical limit: 5-point Gauss-Laguerre quadrature samples y up to 12.641,
+which always extrapolates beyond the correlation's M_peak for heavy-tailed
+distributions typical of VTB feeds.  The ascending-branch-only solve caps
+above-peak nodes at Tb = 990 K; affected nodes carry negligible molar weight
+but should be flagged when they exceed half the GL nodes (3-of-5 for the
+VTB 15/12/25 reference is the operational limit).
+
+---
+
+*End of validation report. Phase 11 added 2026-05-17. Next step: Paper 1
+Section 2 draft (methodology).*

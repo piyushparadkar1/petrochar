@@ -196,6 +196,76 @@ For the VTB synthetic feed: all five quadrature nodes produce T_b ∈ [629, 870]
 well below the 1000 K threshold that would indicate extrapolation beyond the
 physical petroleum regime.
 
+### 2.5.3 Recovery-aware quadrature with heavy-resin lump (Phase 11, Option D)
+
+Real heavy fractions (VTB, vacuum residue, deasphalted-oil bottoms) often cut
+off at ~70-80% recovery because the heavy tail is beyond the thermal cracking
+limit (~720 °C bath temperature in ASTM D1160).  The Phase 11 architecture
+introduces a user-supplied `recovery_fraction` ∈ (0, 1] and an optional
+discrete **heavy-resin lump** that absorbs the unmeasured tail.
+
+**Scaled-xc fitting of the distillable subfraction.**  When
+`recovery_fraction < 1.0`, the measured cumulative-fraction points span only
+[0, recovery_fraction] of the total feed mass.  petrochar rescales them to
+[0, 1] of the distillable subfraction:
+
+    xc_scaled_i = xc_raw_i / recovery_fraction
+
+The boundary point at xc_scaled ≈ 1 is excluded.  The M distribution is then
+fitted to (xc_scaled, M_cuts) so that the Gauss-Laguerre quadrature samples
+the distillable subfraction only — not an extrapolation of the feed beyond
+the measured range.
+
+**Mass-balance closure on bulk MW (number-average).**  The unmeasured tail
+mass is
+
+    f_hr = 1 − recovery_fraction − f_asp,         f_asp = asp_wt_pct / 100.
+
+Number-average MW conservation across the full feed gives
+
+    1/M_bulk = f_dist / M_dist_av  +  f_hr / M_hr  +  f_asp / M_asp     (2.32)
+
+where M_dist_av is the mole-average MW of the distillable subfraction (= sum
+of z_i · M_i across GL nodes), and the asphaltene M_asp = 1700 g/mol is the
+Gonzalez 2007 default.  Eq. 2.32 is solved analytically for M_hr.
+
+**Volume-additive closure on bulk SG.**
+
+    1/SG_bulk = f_dist / SG_dist_vavg  +  f_hr / SG_hr  +  f_asp / SG_asp  (2.33)
+
+where SG_dist_vavg = 1 / Σ_i (xw_i / SG_i) is the volume-weighted average SG
+of the distillable subfraction, and SG_asp = 1.15.  Eq. 2.33 is solved
+analytically for SG_hr.
+
+**HR Tb from constant Watson K (Decision 31).**  The HR lump shares K_W_bulk
+by construction under the constant-Watson-K assumption:
+
+    Tb_hr = (K_W_bulk · SG_hr)^3 / 1.8.
+
+Tb_hr is capped at 1100 K with a UserWarning; the cap is numerical only — the
+HR lump is a closure-derived lump and does not have a physical boiling point.
+
+**Hard-constraint closure (supersedes Decision 27).**  Eqs. 2.32 and 2.33 are
+exact equalities, not pass-gate tolerances.  The bulk MW and bulk SG inputs
+must be internally consistent with the distillation curve, the SARA wt%, and
+the user's recovery_fraction.  Inconsistent inputs raise `ValueError` with
+a "bulk MW closure" / "bulk SG closure" diagnostic message.  The previous
+"bulk MW is diagnostic only" stance from Decision 27 is superseded.
+
+**Practical limit: 5-pt Gauss-Laguerre tail extrapolation.**  Even with
+scaled-xc fitting, the rightmost GL nodes (y_4 = 7.086, y_5 = 12.641) often
+extrapolate beyond Eq. 2.57's M_peak when the distillable subfraction is
+heavy-tailed.  Such above-peak nodes are capped at Tb_hi = 990 K under the
+ascending-branch-only solve (Decision 32) — Tb monotonicity is preserved with
+ties at the cap; their contribution to the molar balance is small (z₄ ≈ 0.004,
+z₅ ≈ 2e-5 for the VTB 15/12/25 reference snapshot).
+
+**Backwards compatibility.**  `recovery_fraction = 1.0` dispatches to the
+Phase 8 path bit-exactly (no HR lump, identical component list).
+
+References: Decisions 30, 31, 32 in `CURRENT_STATUS.md`; implementation in
+`core/sara.append_heavy_resin_and_asphaltene`.
+
 ---
 
 ## 2.6 Asphaltene treatment
@@ -375,6 +445,43 @@ M ≈ 4200 g/mol in the unmeasured 5% tail — unphysical). The distillable-frac
 M distribution analytic mean (369.95 g/mol) is correctly derived from the measured
 distillation data; the departure from M_DIST_TARGET = 563.6 g/mol is a known
 inconsistency in the synthetic test inputs, not a model error.
+
+**Note (Phase 11 supersession):** §2.9.4 above describes the pre-Phase-11
+treatment in which the bulk MW served only as a consistency diagnostic.  Under
+Decision 30 (Phase 11), the bulk MW becomes a **hard closure constraint** when
+`recovery_fraction < 1.0`: Eq. 2.32 (number-average MW conservation) must
+balance exactly, with the heavy-resin lump's MW absorbing the unmeasured tail.
+Inconsistent inputs no longer pass silently — they raise `ValueError`.  When
+`recovery_fraction = 1.0` the legacy behavior described in §2.9.4 still
+applies.  See §2.5.3 for the recovery-aware pipeline.
+
+### 2.9.5 Constant Watson K is load-bearing for the HR lump (Phase 11)
+
+In the legacy (Phase 8) pipeline, the constant Watson K assumption was a
+convenient closure for assigning per-cut SG values; the user could in
+principle switch to a fitted SG distribution (currently unwired) without
+changing the rest of the architecture.  Phase 11 elevates constant Watson K
+to a load-bearing role: the heavy-resin lump's Tb is derived directly from
+K_W_bulk via `Tb_hr = (K_W_bulk · SG_hr)^3 / 1.8` (Decision 31).  This means:
+
+1. **Switching to a fitted SG distribution would invalidate the HR Tb.**  Any
+   future variant of petrochar that supports per-cut measured SG data must
+   provide an alternative HR-Tb assignment (e.g., a separate Tb-of-residue
+   correlation, or treating HR as a fixed convention like the asphaltene).
+2. **K_W_bulk uncertainty propagates directly to Tb_hr.**  A 5% error in
+   K_W_bulk (typical for VTB-type feeds) propagates to a ~15% error in Tb_hr
+   (because Tb_hr ∝ K_W^3).  This is acceptable for PC-SAFT input (where Tb_hr
+   does not directly enter the parameter assignment — the Panuganti A+R
+   correlations are functions of M and γ only) but should be flagged in Paper 1
+   as a known sensitivity of the HR closure.
+
+Paper 1 §2.5.3 disclosure: "petrochar's heavy-resin lump is closure-driven
+under the constant Watson K assumption.  The lump's molecular weight and
+specific gravity are fixed by mass-balance equalities on bulk MW and bulk SG
+respectively; its boiling point is derived from constant K_W_bulk.  The HR
+contribution to the PC-SAFT parameter set uses the same γ-interpolated A+R
+correlation as the distillable nodes (Panuganti et al. 2012, Table 6) with γ
+from K_W_bulk."
 
 ---
 

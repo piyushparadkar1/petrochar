@@ -108,12 +108,13 @@ class TestPseudomponentDataclass:
         assert pc.xc_lower == 0.2
         assert pc.xc_upper == 0.5
 
-    def test_nine_fields_present(self):
-        # Phase 5 original fields + K_W/gamma (Phase 7) + is_asphaltene (Phase 8).
+    def test_ten_fields_present(self):
+        # Phase 5 original fields + K_W/gamma (Phase 7) + is_asphaltene (Phase 8)
+        # + is_heavy_resin (Phase 11).
         pc = Pseudocomponent(z=0.5, M=100.0)
         expected = {
             'z', 'M', 'Tb_K', 'SG', 'xc_lower', 'xc_upper',
-            'K_W', 'gamma', 'is_asphaltene',
+            'K_W', 'gamma', 'is_asphaltene', 'is_heavy_resin',
         }
         assert set(pc.__dataclass_fields__) == expected
 
@@ -125,6 +126,10 @@ class TestPseudomponentDataclass:
     def test_is_asphaltene_defaults_false(self):
         pc = Pseudocomponent(z=0.5, M=100.0)
         assert pc.is_asphaltene is False
+
+    def test_is_heavy_resin_defaults_false(self):
+        pc = Pseudocomponent(z=0.5, M=100.0)
+        assert pc.is_heavy_resin is False
 
 
 # ── 3-point discretization (Riazi Table 4.22) ────────────────────────────────

@@ -23,6 +23,7 @@ build/
 *.csv
 !data/riazi_reference/*.csv
 !data/panuganti_2012/*.csv
+!tests/reference/*.csv
 
 # Copyrighted ASTM material — must not be distributed publicly
 data/riazi_reference/*.pdf

@@ -6,7 +6,7 @@ Standalone Python tool for heavy petroleum fraction characterization. Methodolog
 This is a separate repository from any other PC-SAFT project. Do not import, read, or reference code from outside this directory. See `CLAUDE.md` for forbidden paths.
 
 ## Current Phase
-COMPLETE — all phases 0-10 done. Next: Paper 1 drafting.
+COMPLETE — all phases 0-11 done. Next: Paper 1 drafting.
 
 ## Phases Completed
 - ✅ Phase 0 — Repository scaffold (2026-05-05)
@@ -20,6 +20,7 @@ COMPLETE — all phases 0-10 done. Next: Paper 1 drafting.
 - ✅ Phase 8 — End-to-end pipeline integration test + validation report (reworked 2026-05-16)
 - ✅ Phase 9 — Streamlit UI: 6 tabs, app.py + tabs/*.py (2026-05-16)
 - ✅ Phase 10 — Final docs, packaging, D7169 fix (2026-05-16)
+- ✅ Phase 11 — Recovery-aware quadrature with heavy-resin lump (Option D) (2026-05-17)
 
 ## Decisions Made (frozen)
 
@@ -51,6 +52,9 @@ COMPLETE — all phases 0-10 done. Next: Paper 1 drafting.
 26. **is_asphaltene flag replaces Tb>1000 K threshold everywhere (Phase 8 rework, 2026-05-16):** Asphaltene identity is carried by Pseudocomponent.is_asphaltene=True, set exclusively by sara.append_asphaltene(). No code in core/ uses Tb>1000 K to identify asphaltenes. A hard ValueError is raised if a non-asphaltene component has Tb>1000 K. Decision 19 (ASP Tb=1073.15 K as sorting convention) is retained but the identification logic uses the flag, not the threshold.
 27. **M_av pass-gate compares GL result vs distribution analytic mean (Phase 8 rework, 2026-05-16):** The gate is GL_M_av vs m_dist.average() ≤ 0.5% (quadrature accuracy criterion). M_DIST_TARGET=563.6 g/mol is reported as a diagnostic but is not a gate — the synthetic test feed is internally inconsistent (D1160 endpoint at xc=0.95 implies M~527; bulk MW=700 requires ~4200 g/mol in the 5% tail, which is unphysical). Verified: GL_M_av=371.66, analytic mean=369.95 → 0.46% deviation (PASS).
 28. **K_W-bin test restricted to ASP placement and closure sum (Phase 8 rework, 2026-05-16):** Under constant Watson K all distillable components share K_W_bulk and fall in the same bin — SAT/ARO/RES wt% tests on the constant-K_W synthetic feed have no discriminating power. Tests check: (a) ASP in ASP class; (b) sum = 100 wt%; (c) no NaN deltas. SAT/ARO/RES bin deviation tests removed (were xfail).
+30. **Recovery-aware quadrature with discrete HR lump (Phase 11, 2026-05-17 — supersedes Decision 27):** When `recovery_fraction < 1.0`, the M distribution is fitted to the distillable subfraction only on a scaled xc basis (xc_scaled = xc_raw / recovery_fraction).  The unmeasured tail mass `f_hr = 1 - recovery_fraction - f_asp` is represented by a single discrete heavy-resin lump whose MW comes from number-average closure on bulk MW: `M_hr = f_hr / (1/M_bulk - f_dist/M_dist_av - f_asp/M_asp)`.  SG_hr from the volume-additive closure on bulk SG.  Bulk MW and bulk SG become **hard closure constraints**; the previous "bulk MW is diagnostic only" stance (Decision 27) is superseded.  The HR lump is tagged via `Pseudocomponent.is_heavy_resin=True`; PC-SAFT uses the Panuganti A+R γ-interpolated correlations (same form as distillable nodes), not Gonzalez asphaltene defaults.  `recovery_fraction = 1.0` dispatches to the Phase 8 path bit-exactly.
+31. **HR Tb from constant Watson K with 1100 K cap (Phase 11, 2026-05-17):** Under constant Watson K, the HR lump shares K_W_bulk; its boiling point is `Tb_hr = (K_W_bulk · SG_hr)^3 / 1.8`, capped at 1100 K with UserWarning.  The 1100 K cap is numerical only — the HR lump does not have a physical boiling point.  `generate_pcsaft_table` allows HR Tb up to 1150 K (vs the 1000 K ceiling for ordinary distillable nodes).
+32. **Ascending-branch-only self-consistent (Tb, SG) solve (Phase 11, 2026-05-17):** Eq. 2.57 Tb(M, SG) is non-monotone in M at fixed SG (peak at M_peak = 0.5369/(7.5152e-4·SG - 1.6514e-4)).  Under constant Watson K, SG_try = (1.8·Tb_try)^(1/3)/K_W_bulk is monotone in Tb_try, so the ascending-branch upper bound corresponds to M_peak at SG_at_Tb_hi.  When an M_i exceeds this bound (heavy GL nodes when the M distribution extrapolates beyond Eq. 2.57's range), the node is capped at Tb_hi = 990 K with corresponding SG.  This prevents brentq from locking onto a numerically-valid but unphysical descending-branch root.  Affects the `_solve_tb_from_M_constant_kw` helpers in `tabs/input_data.py` and `tests/test_phase11_recovery_aware.py`.
 
 ## Reference Materials Inventory
 
@@ -170,3 +174,4 @@ acceptable for VTB fractions where the 90-95% tail is already extrapolated terri
 2026-05-16 | Phase 9 complete: app.py + 6 tab files; boot health=ok; 372 passed (unchanged); forbidden-terms 0 hits | next: Phase 10
 2026-05-16 | Phase 10 complete: README.md, docs/methodology.md, CHANGELOG.md, pyproject.toml PyPI-ready, petrochar/_cli.py, D7169 fix; pip install -e . OK; 372 passed; 0 forbidden-term hits | IMPLEMENTATION COMPLETE
 2026-05-16 | Hotfix 1: riazi_daubert_M above-peak fallback (no crash for Tb>Tb_peak at SG~1.04); xlsx upload support in Tab 1; 372 passed; 0 forbidden-term hits | Decision 29 added
+2026-05-17 | Phase 11: recovery-aware quadrature with heavy-resin lump (Option D). New `append_heavy_resin_and_asphaltene` (closure-driven M_hr, SG_hr, Tb_hr); `Pseudocomponent.is_heavy_resin` 10th field; ascending-branch-only `_solve_tb_from_M_constant_kw` fallback for above-peak GL nodes; `kw_bin_check` HR-aware; `generate_pcsaft_table` HR branch (Panuganti A+R); `compute_K_W_per_pseudocomponent` preserves HR flag; recovery_fraction control + HR diagnostics row in Tab 1; HR row highlighted (light blue) in Tab 4; partial-recovery banner + recovery line on M CDF in Tab 3; architectural commitments updated in Tab 6; `tests/test_phase11_recovery_aware.py` 32 active tests + 1 closure-driven skip; VTB 15/12/25 reference snapshot at tests/reference/vtb_15_12_25_expected.csv; 405 passed; 0 forbidden-term hits | Decisions 30, 31, 32 added (Decision 27 superseded). IMPLEMENTATION COMPLETE

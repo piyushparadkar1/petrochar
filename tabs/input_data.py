@@ -46,7 +46,12 @@ from core.distribution import GeneralizedDistribution
 from core.mw_distribution import compute_M_array
 from core.pcsaft_params import generate_pcsaft_table, propane_params
 from core.quadrature import Pseudocomponent, discretize_generalized
-from core.sara import append_asphaltene, kw_bin_check, validate_sara
+from core.sara import (
+    append_asphaltene,
+    append_heavy_resin_and_asphaltene,
+    kw_bin_check,
+    validate_sara,
+)
 from core.sg_distribution import sg_from_watson_k
 from core.watson_k import compute_K_W_per_pseudocomponent
 
@@ -66,7 +71,12 @@ def _solve_tb_from_M_constant_kw(M_i: float, K_W_bulk: float) -> tuple[float, fl
         SG_i = (1.8 * Tb_i)^(1/3) / K_W_bulk
         Tb_i = riazi_daubert_Tb(M_i, SG_i)
 
-    Solved by 1-D root finding on [300, 990] K.
+    Solved by 1-D root finding on the ascending branch of Eq. 2.57 only.
+    For M_i exceeding Eq. 2.57's M_peak at SG_at_Tb_hi (the constant-K_W SG
+    at Tb = 990 K), the residual has the same sign at both bracket ends and
+    brentq could lock onto an unphysical descending-branch root.  Such above-
+    peak components are capped at Tb_hi = 990 K with corresponding SG (Phase
+    11 above-peak fallback, consistent with riazi_daubert_M's pattern).
 
     Parameters
     ----------
@@ -77,13 +87,40 @@ def _solve_tb_from_M_constant_kw(M_i: float, K_W_bulk: float) -> tuple[float, fl
     -------
     Tb_i, SG_i : float, float
     """
+    Tb_lo, Tb_hi = 300.0, 990.0
+    SG_at_Tb_hi = (1.8 * Tb_hi) ** (1.0 / 3.0) / K_W_bulk
+    denom_at_hi = 7.5152e-4 * SG_at_Tb_hi - 1.6514e-4
+    if denom_at_hi > 0:
+        M_peak_at_Tb_hi = 0.5369 / denom_at_hi
+    else:
+        M_peak_at_Tb_hi = float("inf")
+
+    # Above-peak fallback: M_i exceeds Eq. 2.57's ascending-branch upper bound.
+    if M_i >= M_peak_at_Tb_hi * 0.9999:
+        warnings.warn(
+            f"_solve_tb_from_M_constant_kw: M_i={M_i:.1f} g/mol exceeds "
+            f"Eq. 2.57 M_peak ({M_peak_at_Tb_hi:.1f} g/mol) at SG_at_Tb_hi="
+            f"{SG_at_Tb_hi:.4f}.  Capping Tb at {Tb_hi:.0f} K (above-peak "
+            f"fallback).",
+            UserWarning, stacklevel=2,
+        )
+        return float(Tb_hi), float(SG_at_Tb_hi)
+
     def _residual(Tb_try: float) -> float:
         SG_try = (1.8 * Tb_try) ** (1.0 / 3.0) / K_W_bulk
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             return riazi_daubert_Tb(M_i, SG_try) - Tb_try
 
-    Tb_i = float(brentq(_residual, 300.0, 990.0, xtol=0.01))
+    try:
+        Tb_i = float(brentq(_residual, Tb_lo, Tb_hi, xtol=0.01))
+    except ValueError:
+        warnings.warn(
+            f"_solve_tb_from_M_constant_kw: brentq bracket failed for "
+            f"M_i={M_i:.1f} g/mol; capping Tb at {Tb_hi:.0f} K.",
+            UserWarning, stacklevel=2,
+        )
+        Tb_i = Tb_hi
     SG_i = float((1.8 * Tb_i) ** (1.0 / 3.0) / K_W_bulk)
     return Tb_i, SG_i
 
@@ -99,8 +136,16 @@ def _run_pipeline(
     mw_bulk: float,
     sara: dict,
     n_quad: int,
+    recovery_fraction: float,
 ) -> dict:
     """Execute the full 9-step characterization pipeline.
+
+    When recovery_fraction < 1.0, the M distribution is fitted on a SCALED xc
+    basis (xc_scaled = xc_raw / recovery_fraction) so it characterizes the
+    distillable subfraction only.  The unmeasured tail mass
+    (1 - recovery_fraction - f_asp) becomes a single discrete heavy-resin lump
+    whose MW, SG, and Tb are fixed by mass-balance closure on bulk MW, bulk SG,
+    and constant Watson K (Decisions 30, 31, Phase 11).
 
     Parameters
     ----------
@@ -112,10 +157,16 @@ def _run_pipeline(
     mw_bulk : float     Bulk molecular weight, g/mol.
     sara : dict         Keys SAT, ARO, RES, ASP; values in wt%.
     n_quad : int        Number of Gauss-Laguerre quadrature points (3 or 5).
+    recovery_fraction : float
+        Mass fraction of total feed covered by the distillation curve.  Must
+        be in (0, 1].  recovery_fraction = 1.0 dispatches to the legacy Phase
+        8 path (no heavy-resin lump).
 
     Returns
     -------
-    dict  — all intermediate and final objects needed by Tabs 2-6.
+    dict  — all intermediate and final objects needed by Tabs 2-6, including
+    `has_heavy_resin`, `M_hr`, `SG_hr`, `Tb_hr`, `f_hr` keys when partial
+    recovery is detected.
     """
     t0 = time.perf_counter()
 
@@ -124,9 +175,23 @@ def _run_pipeline(
     tbp = dc.to_tbp()
 
     # Interior points for distribution fitting (exclude 0% IBP if present).
-    mask   = tbp.pct > 0.0
-    xc_int = tbp.pct[mask] / 100.0
-    tb_int = tbp.temps_K[mask]
+    mask        = tbp.pct > 0.0
+    xc_int_raw  = tbp.pct[mask] / 100.0
+    tb_int_raw  = tbp.temps_K[mask]
+
+    # Recovery-aware xc scaling (Phase 11).  When recovery_fraction < 1.0, the
+    # measured xc points span [0, recovery_fraction] of the total feed; scale
+    # them to [0, 1] of the distillable subfraction so GL quadrature samples
+    # within the distillable range.  The boundary point at xc_scaled ≈ 1 is
+    # excluded to avoid singular fit behaviour.
+    if recovery_fraction < 1.0 - 1e-9:
+        xc_scaled  = xc_int_raw / recovery_fraction
+        keep       = xc_scaled < 1.0 - 1e-9
+        xc_int     = xc_scaled[keep]
+        tb_int     = tb_int_raw[keep]
+    else:
+        xc_int     = xc_int_raw
+        tb_int     = tb_int_raw
 
     # ── Step 2: Tb distribution (3-param, DIAGNOSTIC ONLY) ───────────────────
     tb_dist = GeneralizedDistribution().fit(xc_int, tb_int, mode="3param")
@@ -156,9 +221,17 @@ def _run_pipeline(
             xc_lower=c.xc_lower, xc_upper=c.xc_upper,
         ))
 
-    # ── Step 6: Append discrete asphaltene ────────────────────────────────────
+    # ── Step 6: Recovery-aware assembly (HR lump + asphaltene) ────────────────
     validate_sara(sara["SAT"], sara["ARO"], sara["RES"], sara["ASP"])
-    comps6 = append_asphaltene(comps_dist, asp_wt_pct=sara["ASP"])
+    asm = append_heavy_resin_and_asphaltene(
+        comps_dist,
+        recovery_fraction=recovery_fraction,
+        asp_wt_pct=sara["ASP"],
+        M_bulk=mw_bulk,
+        SG_bulk=sg_bulk,
+        K_W_bulk=K_W_bulk,
+    )
+    comps6 = asm["components"]
 
     # ── Step 7: K_W bin closure check ─────────────────────────────────────────
     kw_result = kw_bin_check(comps6, sara, flag_tol=5.0)
@@ -178,9 +251,11 @@ def _run_pipeline(
     df_full = pd.concat([df, prop_row], ignore_index=True)
 
     # ── Bulk closure metrics ───────────────────────────────────────────────────
-    dist_comps  = [c for c in comps8 if not c.is_asphaltene]
-    z_d         = np.array([c.z for c in dist_comps])
-    M_d         = np.array([c.M for c in dist_comps])
+    # Distillable nodes only (exclude HR and ASP) for the GL-vs-analytic gate.
+    gl_dist_only = [c for c in comps8
+                    if not c.is_asphaltene and not c.is_heavy_resin]
+    z_d         = np.array([c.z for c in gl_dist_only])
+    M_d         = np.array([c.M for c in gl_dist_only])
     GL_M_av     = float(np.dot(z_d, M_d) / z_d.sum())
     dist_M_mean = m_dist.average()
 
@@ -198,9 +273,11 @@ def _run_pipeline(
         # Raw inputs preserved for display
         pct=pct, temps_K=temps_K, method=method, basis=basis,
         sg_bulk=sg_bulk, mw_bulk=mw_bulk, sara=sara, n_quad=n_quad,
+        recovery_fraction=recovery_fraction,
         # Step outputs
         dc=dc, tbp=tbp,
         xc_int=xc_int, tb_int=tb_int,
+        xc_int_raw=xc_int_raw, tb_int_raw=tb_int_raw,
         tb_dist=tb_dist, rms_tb=rms_tb,
         tb_dist_2param=tb_dist_2param, rms_tb_2p=rms_tb_2p,
         SG_cuts=SG_cuts, K_W_bulk=K_W_bulk,
@@ -211,6 +288,13 @@ def _run_pipeline(
         GL_M_av=GL_M_av, dist_M_mean=dist_M_mean,
         SG_av_full=SG_av_full,
         M_dist_target=M_dist_target,
+        # Phase 11 heavy-resin diagnostics
+        has_heavy_resin=asm["has_heavy_resin"],
+        f_hr=asm["f_hr"],
+        M_hr=asm["M_hr"],
+        SG_hr=asm["SG_hr"],
+        Tb_hr=asm["Tb_hr"],
+        M_dist_av=asm["M_dist_av"],
         elapsed=elapsed,
     )
 
@@ -375,6 +459,13 @@ def render(ss) -> None:
     if np.any(pct_raw < 0) or np.any(pct_raw > 100):
         _warnings.append("Cumulative fraction values must be in [0, 100]%.")
 
+    # Maximum measured cumulative fraction (used as default for recovery_fraction).
+    if has_data and len(pct_raw) > 0:
+        _max_pct = float(np.max(pct_raw))
+    else:
+        _max_pct = 100.0
+    _max_recovery_default = max(0.05, min(_max_pct / 100.0, 1.0))
+
     # ── Bulk properties ────────────────────────────────────────────────────────
     st.subheader("Bulk properties")
 
@@ -464,6 +555,53 @@ def render(ss) -> None:
             help="5-point default. 3-point selectable for faster runs.",
         )
 
+    # Recovery-aware quadrature (Phase 11, Option D).
+    # Default = maximum measured cumulative fraction.  Set 1.0 only if the
+    # distillation curve reaches the end of the distillable subfraction
+    # (i.e. asphaltenes plus heavy-resin tail are negligible).
+    st.markdown("**Distillation recovery (Phase 11)**")
+    recovery_fraction = st.number_input(
+        "Recovery fraction (mass fraction of feed covered by the distillation curve)",
+        min_value=0.05,
+        max_value=1.00,
+        value=float(_max_recovery_default),
+        step=0.001,
+        format="%.3f",
+        help=(
+            "Mass fraction of the total feed mass covered by the distillation "
+            "curve.  When < 1.0, an unmeasured tail (1 - recovery - ASP wt%) "
+            "is represented by a discrete heavy-resin lump whose MW and SG are "
+            "fixed by mass-balance closure on bulk MW and bulk SG (Phase 11 "
+            "Option D, Decisions 30, 31).  Defaults to the maximum cumulative "
+            "fraction in your data (here: "
+            f"{_max_recovery_default*100:.1f}%).  Set 1.0 only if the curve "
+            "endpoint already reaches the start of the asphaltene fraction."
+        ),
+    )
+
+    # Live validation for recovery_fraction
+    f_asp_input = (sara_asp) / 100.0
+    if recovery_fraction + f_asp_input > 1.0 + 1e-6:
+        _warnings.append(
+            f"recovery_fraction ({recovery_fraction:.3f}) + ASP wt% "
+            f"({sara_asp:.1f}%) exceeds 100%.  Reduce one to avoid overlap "
+            f"between distillation data and asphaltenes."
+        )
+    elif recovery_fraction < _max_recovery_default - 1e-6:
+        _warnings.append(
+            f"recovery_fraction ({recovery_fraction:.3f}) is less than the "
+            f"maximum measured cumulative fraction "
+            f"({_max_recovery_default:.3f}).  Some distillation data will be "
+            f"discarded — increase recovery_fraction to keep all measured "
+            f"cuts in the fit."
+        )
+    elif recovery_fraction < 1.0 - 1e-9 and (1.0 - recovery_fraction - f_asp_input) < 0.01:
+        st.info(
+            f"Heavy-resin mass fraction is small "
+            f"(f_hr ≈ {(1.0 - recovery_fraction - f_asp_input)*100:.2f} wt%); "
+            f"the HR lump will contribute little to the mixture."
+        )
+
     # ── Warnings display ─────────────────────────────────────────────────────
     for w in _warnings:
         st.warning(w)
@@ -502,12 +640,14 @@ def render(ss) -> None:
                     mw_bulk=float(mw_bulk),
                     sara=sara_dict,
                     n_quad=int(n_quad),
+                    recovery_fraction=float(recovery_fraction),
                 )
                 ss["inputs"] = dict(
                     pct=pct_raw, temps_K=temps_K_input,
                     method=method, basis=basis, temp_unit=temp_unit,
                     sg_bulk=float(sg_bulk), mw_bulk=float(mw_bulk),
                     sara=sara_dict, n_quad=int(n_quad),
+                    recovery_fraction=float(recovery_fraction),
                 )
                 ss["pipeline_result"] = result
                 ss["pipeline_ready"]  = True
@@ -547,6 +687,32 @@ def render(ss) -> None:
             flagged = r["kw_result"]["flagged"]
             st.metric("K_W-bin check", "FLAGGED" if flagged else "OK",
                       delta_color="inverse" if flagged else "normal")
+
+        # ── Phase 11 heavy-resin diagnostics ──────────────────────────────────
+        if r.get("has_heavy_resin"):
+            st.markdown("**Heavy-resin lump (Phase 11 closure)**")
+            h1, h2, h3, h4 = st.columns(4)
+            with h1:
+                st.metric("f_hr (wt%)", f"{r['f_hr']*100:.2f}%")
+            with h2:
+                st.metric("M_hr (g/mol)", f"{r['M_hr']:.1f}")
+            with h3:
+                st.metric("SG_hr", f"{r['SG_hr']:.4f}")
+            with h4:
+                st.metric("Tb_hr (K)", f"{r['Tb_hr']:.1f}")
+            st.caption(
+                f"Heavy-resin lump created (recovery = "
+                f"{r['recovery_fraction']:.3f}).  MW and SG are set by mass-"
+                f"balance closure on bulk MW = {r['mw_bulk']:.1f} g/mol and "
+                f"bulk SG = {r['sg_bulk']:.4f}.  Tb_hr derived from constant "
+                f"Watson K (Decision 31).  M_dist_av "
+                f"(distillable subfraction) = {r['M_dist_av']:.1f} g/mol."
+            )
+        elif r.get("recovery_fraction", 1.0) < 1.0 - 1e-9:
+            st.info(
+                f"No heavy-resin lump created (f_hr ≈ 0, recovery + ASP ≈ 100 wt%); "
+                f"pipeline dispatched to the Phase 8 path."
+            )
 
         if r["kw_result"]["flagged"]:
             with st.expander("K_W-bin closure flags"):

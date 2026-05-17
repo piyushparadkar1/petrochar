@@ -68,7 +68,7 @@ def render(ss) -> None:
         - **No solvent-deasphalting data required.**  No input from
           solvent-deasphalting operations is used or needed.
           Inputs are routine refinery assay data only (distillation
-          curve, bulk SG, bulk MW, SARA wt%).
+          curve, bulk SG, bulk MW, SARA wt%, recovery fraction).
         - **No tuning against process observables.**  Pseudo-component properties
           (Tb, SG, PC-SAFT parameters) are determined entirely by published
           correlations.  There are no adjustable parameters fitted to AOP or
@@ -84,6 +84,17 @@ def render(ss) -> None:
         - **Self-consistent Tb/SG assignment (Decision 25).**  Pseudo-component
           Tb_i is derived from riazi_daubert_Tb(M_i, SG_i) via root finding, not
           by evaluating the Tb distribution at quadrature nodes.
+        - **Recovery-aware quadrature with heavy-resin lump (Decisions 30, 31,
+          Phase 11).**  When the distillation curve covers only
+          `recovery_fraction` < 1.0 of the total feed mass, the M distribution
+          is fitted on a scaled xc basis (xc_scaled = xc_raw / recovery_fraction)
+          so it characterizes the distillable subfraction only.  The unmeasured
+          tail mass (1 - recovery_fraction - f_asp) is represented by a single
+          discrete heavy-resin lump whose MW and SG are fixed by mass-balance
+          closure on bulk MW and bulk SG.  Heavy-resin Tb is derived from
+          constant Watson K (Tb_hr = (K_W_bulk · SG_hr)^3 / 1.8).  Bulk MW and
+          bulk SG become hard closure constraints — the previous "MW is a
+          diagnostic" stance from Decision 27 is superseded.
 
         For complete details see `docs/validation_report.md`.
         """

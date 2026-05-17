@@ -183,3 +183,100 @@ Forbidden-terms grep: 0 hits.
 ---
 
 *End of changelog for petrochar v0.1.0.*
+
+---
+
+## Hotfix 1 — `riazi_daubert_M` above-peak fallback + xlsx upload (2026-05-16)
+
+- **`core/correlations.py`:** Above-peak fallback added to `riazi_daubert_M`.
+  Eq. 2.57 has a Tb peak at `M_peak = 0.5369 / (7.5152e-4·SG - 1.6514e-4)`.
+  For real VTB cuts with SG ≈ 1.04 and Tb up to 883 K, the target Tb can
+  exceed Tb(M_peak), leaving no ascending-branch root.  The fallback returns
+  M_peak with a UserWarning instead of raising ValueError.
+- **`tabs/input_data.py`:** File uploader accepts both `.csv` and `.xlsx`
+  (first sheet); extension-based dispatch to `pd.read_excel` or `pd.read_csv`.
+- **Decision 29 added:** Above-peak M = M_peak is a deliberate upper-bound
+  convention, not interpolation.  Callers that suppress the UserWarning
+  receive M_peak silently for cuts beyond the correlation validity range.
+
+**Pass-gate:** 372/372 tests unchanged; `riazi_daubert_M(883.15, 1.0404) →
+870.54 g/mol` instead of crashing. 0 forbidden-term hits.
+
+---
+
+## Phase 11 — Recovery-aware quadrature with heavy-resin lump (Option D, 2026-05-17)
+
+petrochar previously assumed the distillation curve covered 100% of the feed
+mass (recovery_fraction = 1.0).  Real heavy fractions (VTB, vacuum residue,
+deasphalted-oil bottoms) often cut off at ~70-80% recovery because the heavy
+tail is beyond the thermal cracking limit (~720 °C bath temperature in D1160).
+Phase 11 introduces a user-supplied `recovery_fraction` and a single discrete
+heavy-resin lump that absorbs the unmeasured tail.
+
+**Decisions 30, 31, 32 added (Decision 27 superseded):**
+
+- **Decision 30 — recovery-aware quadrature:** When `recovery_fraction < 1.0`,
+  the M distribution is fitted to the **distillable subfraction only** on a
+  scaled xc basis (xc_scaled = xc_raw / recovery_fraction).  The unmeasured
+  tail mass (1 - recovery_fraction - f_asp) becomes a single discrete
+  heavy-resin lump.  `recovery_fraction = 1.0` dispatches to the Phase 8
+  path bit-exactly.
+- **Decision 31 — closure-driven HR properties:** `M_hr = f_hr / (1/M_bulk -
+  f_dist/M_dist_av - f_asp/M_asp)`; `SG_hr = f_hr / (1/SG_bulk -
+  f_dist/SG_dist_vavg - f_asp/SG_asp)`; `Tb_hr = (K_W_bulk · SG_hr)^3 / 1.8`
+  (capped at 1100 K).  Bulk MW and bulk SG become **hard closure constraints**
+   — the "bulk MW is diagnostic only" stance from Decision 27 is superseded.
+- **Decision 32 — ascending-branch-only self-consistent solve:** The
+  `(M, K_W) → (Tb, SG)` solve checks whether `M_i > M_peak` at SG_at_Tb_hi
+  and, if so, caps the node at Tb_hi = 990 K with corresponding SG.  This
+  prevents brentq from locking onto an unphysical descending-branch root and
+  preserves Tb-monotonicity across GL nodes (ties at the cap allowed).
+
+**Code changes:**
+
+- `core/quadrature.py` — `Pseudocomponent` gains `is_heavy_resin: bool` (10th
+  field; defaults False).
+- `core/sara.py` — new `append_heavy_resin_and_asphaltene(...)` returning a
+  dict with HR diagnostics.  `append_asphaltene` updated to preserve
+  `is_heavy_resin`.  `kw_bin_check` extended: HR participates in K_W bin tally;
+  `kw_calc['HR']` added for diagnostics.  Range-error messages now include
+  "bulk MW closure"/"bulk SG closure" prefixes.  Internal z-sum tolerance
+  loosened from 1e-9 to 1e-6 (floating-point accumulation across 7 components).
+- `core/pcsaft_params.py` — `generate_pcsaft_table` adds an
+  `elif c.is_heavy_resin:` branch using Panuganti A+R γ-interpolated
+  correlations.  HR Tb ceiling relaxed to 1150 K (vs 1000 K for distillable)
+  since Tb_hr is a closure-derived convention, not a physical boiling point.
+- `core/watson_k.py` — `compute_K_W_per_pseudocomponent` preserves
+  `is_heavy_resin` when rebuilding the component list.
+- `tabs/input_data.py` — new `recovery_fraction` number input (default =
+  max measured cumulative fraction); pipeline wired to
+  `append_heavy_resin_and_asphaltene`; ascending-branch-only solver matching
+  Decision 32; Last-run summary panel adds an HR metrics row when partial
+  recovery is detected.
+- `tabs/pseudocomponents.py` — HR row highlighted in light blue; Type tag
+  "HR" for the heavy-resin lump; updated Watson K summary expander.
+- `tabs/distributions.py` — partial-recovery banner; recovery-limit dotted
+  line on the M CDF panel.
+- `tabs/validation.py` — Architectural Commitments section updated with
+  Decisions 30, 31.
+
+**Test additions:** `tests/test_phase11_recovery_aware.py` — 32 active tests
+(plus 1 closure-driven skip) across 7 classes.  Pass criteria include:
+recovery=1.0 reproduces Phase 8 bit-exactly; VTB 15/12/25 bulk MW/SG closure
+to <0.001%; Tb non-decreasing across distillable nodes; HR uses Panuganti A+R
+params; full-pipeline snapshot vs `tests/reference/vtb_15_12_25_expected.csv`.
+
+**VTB 15/12/25 reference snapshot:** practical VTB profile, IBP=440 °C,
+50%=595 °C, 70%=710 °C, recovery=70.7%, ASP=17.4 wt%, bulk MW=728.9, bulk
+SG=1.031.  Closure-driven outcome: K_W=11.23, M_dist_av=640, M_hr=719,
+SG_hr=0.917, Tb_hr=608 K.  Three of five GL nodes hit the Tb=990 K cap
+(above M_peak ≈ 831 g/mol) — the fundamental tension between 5-pt
+Gauss-Laguerre tail extrapolation and Eq. 2.57's M_peak, disclosed in Paper 1
+§2.5.3.
+
+**Pass-gate:** 405 passed + 1 skipped (closure-driven natural-ordering check);
+0 forbidden-term hits; `python -m py_compile` on all `tabs/*.py` succeeds.
+
+---
+
+*End of changelog for petrochar v0.1.0 + Hotfix 1 + Phase 11.*

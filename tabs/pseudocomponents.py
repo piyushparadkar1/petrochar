@@ -49,11 +49,21 @@ def render(ss) -> None:
 
     # ── Build display table ───────────────────────────────────────────────────
     rows = []
+    dist_counter = 0
     for i, c in enumerate(comps8):
         pc_row = df_pcsaft.iloc[i]
+        # Type tag: ASP for asphaltene, HR for heavy-resin lump, D{n} for
+        # distillable quadrature nodes (Phase 11 type taxonomy).
+        if c.is_asphaltene:
+            type_tag = "ASP"
+        elif c.is_heavy_resin:
+            type_tag = "HR"
+        else:
+            dist_counter += 1
+            type_tag = f"D{dist_counter}"
         rows.append({
             "Index":       i + 1,
-            "Type":        "ASP" if c.is_asphaltene else f"D{i+1}",
+            "Type":        type_tag,
             "z":           round(c.z,  6),
             "MW (g/mol)":  round(c.M,  2),
             "Tb (degC)":   round(c.Tb_K - 273.15, 1),
@@ -64,17 +74,20 @@ def render(ss) -> None:
             "m":           round(float(pc_row["m"]), 4),
             "sigma (A)":   round(float(pc_row["sigma_A"]), 4),
             "eps/k (K)":   round(float(pc_row["eps_over_k_K"]), 2),
-            "is_asphaltene": c.is_asphaltene,
+            "is_asphaltene":  c.is_asphaltene,
+            "is_heavy_resin": c.is_heavy_resin,
         })
     df_display = pd.DataFrame(rows)
 
-    # ── Highlight asphaltene rows ─────────────────────────────────────────────
-    def _highlight_asp(row):
+    # ── Highlight asphaltene rows (yellow) and heavy-resin row (light blue) ──
+    def _highlight_row(row):
         if row["is_asphaltene"]:
             return ["background-color: #fff3cd"] * len(row)
+        if row["is_heavy_resin"]:
+            return ["background-color: #d6ecf3"] * len(row)
         return [""] * len(row)
 
-    styled = df_display.style.apply(_highlight_asp, axis=1).format(
+    styled = df_display.style.apply(_highlight_row, axis=1).format(
         {
             "z":           "{:.6f}",
             "MW (g/mol)":  "{:.2f}",
@@ -91,7 +104,14 @@ def render(ss) -> None:
     )
 
     st.subheader(f"Pseudo-component table ({len(comps8)} components)")
-    st.caption("Asphaltene row highlighted in yellow.")
+    has_hr = any(c.is_heavy_resin for c in comps8)
+    if has_hr:
+        st.caption(
+            "Asphaltene row highlighted in **yellow**; heavy-resin lump (Phase 11) "
+            "highlighted in **light blue**."
+        )
+    else:
+        st.caption("Asphaltene row highlighted in yellow.")
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # ── Download CSV ──────────────────────────────────────────────────────────
@@ -140,13 +160,32 @@ def render(ss) -> None:
 
     # ── Watson K summary ──────────────────────────────────────────────────────
     with st.expander("Watson K and aromaticity summary"):
-        kw_vals = [c.K_W for c in comps8 if not c.is_asphaltene]
-        g_vals  = [c.gamma for c in comps8 if not c.is_asphaltene]
-        if kw_vals:
-            st.markdown(
-                f"All distillable components share **K_W = {kw_vals[0]:.3f}** "
+        # Distillable components only (exclude both ASP and HR).
+        dist_only = [c for c in comps8
+                     if not c.is_asphaltene and not c.is_heavy_resin]
+        asp_only  = [c for c in comps8 if c.is_asphaltene]
+        hr_only   = [c for c in comps8 if c.is_heavy_resin]
+        if dist_only:
+            kw_d = dist_only[0].K_W
+            g_d  = dist_only[0].gamma
+            msg = (
+                f"All distillable components share **K_W = {kw_d:.3f}** "
                 f"(constant Watson K method).  "
-                f"Corresponding aromaticity: **gamma = {g_vals[0]:.4f}**  "
+                f"Corresponding aromaticity: **gamma = {g_d:.4f}**  "
                 f"(linear clamp: gamma = clamp((13.0 - K_W) / (13.0 - 9.5), 0, 1)).  "
-                f"ASP K_W = {comps8[-1].K_W:.3f}, ASP gamma = {comps8[-1].gamma:.4f}."
             )
+            if hr_only:
+                msg += (
+                    f"\n\n**Heavy-resin lump:** K_W = {hr_only[0].K_W:.3f}, "
+                    f"gamma = {hr_only[0].gamma:.4f}.  "
+                    f"(HR shares K_W_bulk by construction under constant Watson K, "
+                    f"Decision 31.)"
+                )
+            if asp_only:
+                msg += (
+                    f"\n\n**Asphaltene:** K_W = {asp_only[0].K_W:.3f}, "
+                    f"gamma = {asp_only[0].gamma:.4f}.  "
+                    f"(Numerical conventions Tb = 1073.15 K, SG = 1.15.  ASP "
+                    f"K_W is recorded only — PC-SAFT uses Gonzalez 2007 defaults.)"
+                )
+            st.markdown(msg)

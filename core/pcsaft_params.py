@@ -65,11 +65,16 @@ _C3_M      =   2.002   # dimensionless
 _C3_SIGMA  =   3.6180  # Angstrom; NOT 3.168 (Aspen typo)
 _C3_EPSK   = 208.11    # K
 
-# ── Guard threshold: distillable pseudo-components must not exceed this Tb ────
-# Tb_K > this value for a distillable (is_asphaltene=False) component is a
-# characterisation error (distribution extrapolation beyond physical range).
+# ── Guard thresholds for non-asphaltene Tb values ────────────────────────────
+# Distillable (is_asphaltene=False, is_heavy_resin=False): hard ceiling 1000 K.
+# Tb > 1000 K for a distillable signals distribution extrapolation beyond the
+# measured range — characterisation error, raise ValueError.
+# Heavy-resin lump (is_heavy_resin=True): ceiling relaxed to 1150 K because
+# Tb_hr is derived from constant Watson K closure and is not a physical
+# boiling point (Decision 31, Phase 11).
 
-_DISTILLABLE_TB_MAX = 1000.0   # K; raise ValueError if exceeded by non-ASP
+_DISTILLABLE_TB_MAX = 1000.0   # K; hard ceiling for ordinary distillable nodes
+_HR_TB_MAX_PCSAFT   = 1150.0   # K; relaxed ceiling for heavy-resin lump only
 
 
 # ── Saturates (Panuganti Table 6, rows 1-3) ───────────────────────────────────
@@ -277,12 +282,32 @@ def generate_pcsaft_table(
         if c.is_asphaltene:
             m, sigma, epsk = gonzalez_asphaltene_params()
             comp_type = 'asphaltene'
+
+        elif c.is_heavy_resin:
+            # Heavy-resin lump uses the same Panuganti A+R gamma-interpolated
+            # correlations as distillable nodes.  Its Tb_hr is a Watson-K-closure
+            # convention, not a physical boiling point, so the Tb ceiling is
+            # relaxed to _HR_TB_MAX_PCSAFT = 1150 K (Decision 31, Phase 11).
+            if not math.isnan(c.Tb_K) and c.Tb_K > _HR_TB_MAX_PCSAFT:
+                raise ValueError(
+                    f"generate_pcsaft_table: heavy-resin lump (component {i}, "
+                    f"M={c.M:.1f} g/mol) has Tb_K={c.Tb_K:.1f} K > "
+                    f"{_HR_TB_MAX_PCSAFT:.0f} K.  Closure may be unreliable.  "
+                    f"Check bulk MW/SG inputs."
+                )
+            if c.gamma is None:
+                raise ValueError(
+                    f"generate_pcsaft_table: heavy-resin component {i} "
+                    f"(M={c.M:.1f}) has gamma=None.  Call "
+                    f"compute_K_W_per_pseudocomponent before generate_pcsaft_table."
+                )
+            m, sigma, epsk = panuganti_distillable_params(c.M, c.gamma)
+            comp_type = 'heavy_resin'
+
         else:
-            # Guard: distillable pseudo-components must have physical Tb values.
-            # Tb > 1000 K for a distillable component signals that the distribution
-            # extrapolated beyond the measured distillation range into a regime
-            # where Riazi-Daubert is unreliable.  Raise hard error rather than
-            # silently reclassifying as asphaltene (Decision 1, Phase 8 rework).
+            # Distillable quadrature node — hard 1000 K ceiling.
+            # Tb > 1000 K signals distribution extrapolation beyond the measured
+            # range (Decision 26, Phase 8 rework).
             if not math.isnan(c.Tb_K) and c.Tb_K > _DISTILLABLE_TB_MAX:
                 raise ValueError(
                     f"generate_pcsaft_table: distillable component {i} "

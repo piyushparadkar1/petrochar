@@ -52,6 +52,18 @@ def render(ss) -> None:
         "individual Tb via SG_i = (1.8 × Tb_i)^(1/3) / K_W."
     )
 
+    # ── Phase 11 recovery note ────────────────────────────────────────────────
+    rec_frac = r.get("recovery_fraction", 1.0)
+    if rec_frac < 1.0 - 1e-9:
+        st.warning(
+            f"**Recovery-aware fit (Phase 11):** the distillation curve covers "
+            f"only **{rec_frac*100:.1f}%** of the total feed mass.  The M and "
+            f"SG distributions are fitted on a **scaled** xc basis "
+            f"(xc_scaled = xc_raw / {rec_frac:.3f}), so the GL quadrature "
+            f"samples the distillable subfraction only.  The unmeasured tail "
+            f"is represented by the discrete heavy-resin lump (see Tab 4)."
+        )
+
     # ── Extract data ──────────────────────────────────────────────────────────
     m_dist     = r["m_dist"]
     xc_int     = r["xc_int"]
@@ -118,8 +130,16 @@ def render(ss) -> None:
                         label=f"Node {i+1} (z={z:.3f})")
         ax_mcdf.plot(m_node, xc_node, "^", color=node_colors[i],
                      markersize=8, zorder=5)
+    # Mark recovery limit as a horizontal dashed line (Phase 11).
+    if rec_frac < 1.0 - 1e-9:
+        ax_mcdf.axhline(
+            1.0, color="#888888", linestyle=":", linewidth=1.0,
+            label="distillable subfraction = 1.0",
+        )
     ax_mcdf.set_xlabel("M (g/mol)", fontsize=10)
-    ax_mcdf.set_ylabel("Cumulative fraction", fontsize=10)
+    ax_mcdf.set_ylabel("Cumulative fraction (within distillable subfraction)"
+                        if rec_frac < 1.0 - 1e-9 else "Cumulative fraction",
+                        fontsize=10)
     ax_mcdf.set_title("CDF — Molecular Weight", fontsize=10)
     ax_mcdf.legend(fontsize=7, loc="upper left")
     ax_mcdf.grid(True, alpha=0.3)

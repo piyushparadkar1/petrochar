@@ -91,7 +91,8 @@ def compute_K_W_per_pseudocomponent(
                 xc_upper=c.xc_upper,
                 K_W=kw,
                 gamma=gamma,
-                is_asphaltene=c.is_asphaltene,   # preserve asphaltene identity
+                is_asphaltene=c.is_asphaltene,    # preserve asphaltene identity
+                is_heavy_resin=c.is_heavy_resin,  # preserve heavy-resin identity (Phase 11)
             )
         )
     return result

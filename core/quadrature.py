@@ -97,22 +97,31 @@ class Pseudocomponent:
     gamma         : aromaticity factor gamma in [0, 1]; 0 = paraffinic, 1 = PNA.
                     None until compute_K_W_per_pseudocomponent is called.
     is_asphaltene : True if and only if this component was added by
-                    sara.append_asphaltene().  False for all distillable
-                    pseudo-components from discretize_generalized().
+                    sara.append_asphaltene() or sara.append_heavy_resin_and_asphaltene().
+                    False for all distillable pseudo-components from
+                    discretize_generalized() and for the heavy-resin lump.
                     Asphaltene identification must use this flag, NOT a Tb
                     threshold.  Distillable components with Tb > 1000 K are a
                     characterisation error and raise ValueError in
                     generate_pcsaft_table.
+    is_heavy_resin: True if and only if this component is the discrete
+                    heavy-resin lump added by
+                    sara.append_heavy_resin_and_asphaltene() when the
+                    distillation recovery is below 1.0.  False for all
+                    quadrature nodes and for the asphaltene component.
+                    Always False when is_asphaltene is True.
+                    Decision 30 (Phase 11).
     """
-    z:             float
-    M:             float
-    Tb_K:          float          = float('nan')
-    SG:            float          = float('nan')
-    xc_lower:      float          = 0.0
-    xc_upper:      float          = 0.0
-    K_W:           Optional[float] = None
-    gamma:         Optional[float] = None
-    is_asphaltene: bool            = False
+    z:              float
+    M:              float
+    Tb_K:           float          = float('nan')
+    SG:             float          = float('nan')
+    xc_lower:       float          = 0.0
+    xc_upper:       float          = 0.0
+    K_W:            Optional[float] = None
+    gamma:          Optional[float] = None
+    is_asphaltene:  bool            = False
+    is_heavy_resin: bool            = False
 
 
 # ── Discretization ────────────────────────────────────────────────────────────
